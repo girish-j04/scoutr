@@ -106,7 +106,7 @@ export default function AppDashboard() {
       const alreadyHaveMetadata = monitoredPlayers.some(p => p.player_id === id);
       if (!alreadyHaveMetadata) {
         try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/player/${id}`);
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "/api"}/player/${id}`);
           if (res.ok) {
             const p = await res.json();
             setMonitoredPlayers(curr => {

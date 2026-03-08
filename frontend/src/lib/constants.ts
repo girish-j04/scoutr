@@ -1,6 +1,6 @@
 import { ClubProfile, DossierCandidate, MonitoringAlert, ReasoningStep } from "./types";
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 export const GOLDEN_PATH_QUERY =
   "Find me a left-back under 24, comfortable in a high press, contract expiring within 12 months, available for under €7M, preferably from a league with similar intensity to the Championship.";
