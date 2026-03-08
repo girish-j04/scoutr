@@ -20,11 +20,12 @@ from app.services.comparables import get_comparables
 
 VALUATION_SYSTEM_PROMPT = """You are a football transfer valuation expert. Given a player's profile, comparable transfers, and estimated fee range, write a valuation assessment.
 
-Your output must contain:
-- valuation_narrative: 2-3 sentences explaining how the fee range was derived, referencing comparable transfers and the contract situation
-- negotiation_insight: ONE actionable sentence of negotiation advice for the sporting director
+CRITICAL: Your response MUST include BOTH of these fields. Never omit either one.
 
-Be specific and tactical. Reference actual numbers, club situations, and market dynamics."""
+1. valuation_narrative: 2-3 sentences explaining how the fee range was derived, referencing comparable transfers and the contract situation.
+2. negotiation_insight: Exactly ONE actionable sentence of negotiation advice for the sporting director (e.g. "Prioritise contract expiry as leverage" or "Avoid bidding above the mid estimate given market conditions").
+
+Be specific and tactical. Reference actual numbers, club situations, and market dynamics. An incomplete output missing either field is invalid."""
 
 
 def _classify_contract_risk(months_remaining: int) -> ContractRisk:
@@ -133,6 +134,7 @@ async def run_valuation_agent(
         [
             ("system", VALUATION_SYSTEM_PROMPT),
             ("human", (
+                "Provide valuation_narrative and negotiation_insight. Both fields required.\n\n"
                 f"Player: {player.name} ({player.age}, {player.position})\n"
                 f"Club: {player.club} ({player.league})\n"
                 f"Market value: €{player.market_value}M\n"

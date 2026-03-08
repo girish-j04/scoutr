@@ -248,7 +248,7 @@ def _build_golden_dossier(player: PlayerProfile, rank: int, reason: str, summary
         tactical_fit_score=85 - (rank - 1) * 5,
         fit_explanation=f"{player.name} profiles strongly as a modern ball-carrying full-back who thrives in high-press systems.",
         heatmap_zones=["left flank", "opposition half", "final third"],
-        formation_compatibility="4-3-3 high press",
+        formation_compatibility=["4-3-3", "4-2-3-1", "3-5-2"],
     )
 
 

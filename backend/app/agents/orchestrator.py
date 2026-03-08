@@ -1,7 +1,7 @@
 """
 LangGraph Orchestrator.
 
-Chains: query parser → Scout Agent → Valuation Agent → output assembly.
+Chains: query parser → Scout Agent → Valuation Agent → Tactical Fit (Dev 3) → output assembly.
 Emits SSE events at each step for live frontend streaming.
 """
 
@@ -11,6 +11,8 @@ import asyncio
 from typing import TypedDict, Optional
 
 from langgraph.graph import StateGraph, END
+
+from scoutr.agents.tactical_fit import evaluate_tactical_fit
 
 from app.schemas import (
     ParsedSearchCriteria,
@@ -130,6 +132,26 @@ async def assemble_node(state: OrchestratorState) -> dict:
         if v is None:
             continue
 
+        # Dev 3: Tactical Fit Agent (runs in thread to avoid blocking)
+        pid = str(c.player.player_id)
+        try:
+            pid_int = int(pid) if pid.isdigit() else 1001
+            tf = await asyncio.to_thread(
+                evaluate_tactical_fit,
+                pid_int,
+                api_base_url="http://localhost:8000",
+                use_claude=True,
+            )
+            tactical_fit_score = tf.get("tactical_fit_score")
+            fit_explanation = tf.get("fit_explanation")
+            heatmap_zones = tf.get("heatmap_zones")
+            formation_compatibility = tf.get("formation_compatibility")
+        except Exception:
+            tactical_fit_score = None
+            fit_explanation = None
+            heatmap_zones = None
+            formation_compatibility = None
+
         dossier = PlayerDossier(
             player=c.player,
             rank=c.rank,
@@ -141,11 +163,10 @@ async def assemble_node(state: OrchestratorState) -> dict:
             comparable_transfers=v.comparable_transfers,
             valuation_narrative=v.valuation_summary.valuation_narrative,
             negotiation_insight=v.valuation_summary.negotiation_insight,
-            # Tactical fit placeholder — Dev 3 will fill these
-            tactical_fit_score=None,
-            fit_explanation=None,
-            heatmap_zones=None,
-            formation_compatibility=None,
+            tactical_fit_score=tactical_fit_score,
+            fit_explanation=fit_explanation,
+            heatmap_zones=heatmap_zones,
+            formation_compatibility=formation_compatibility,
         )
         dossiers.append(dossier)
 

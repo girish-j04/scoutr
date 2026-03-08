@@ -120,7 +120,7 @@ class ValuationSummary(BaseModel):
     """LLM-generated valuation narrative."""
 
     valuation_narrative: str = Field(description="2-3 sentence valuation analysis explaining the fee range and contract situation")
-    negotiation_insight: str = Field(description="One-sentence tactical negotiation advice for the sporting director")
+    negotiation_insight: str = Field(default="", description="One-sentence tactical negotiation advice for the sporting director")
 
 
 class ValuationResult(BaseModel):
@@ -151,11 +151,11 @@ class PlayerDossier(BaseModel):
     valuation_narrative: str
     negotiation_insight: str
 
-    # Placeholder for Dev 3's tactical fit agent
-    tactical_fit_score: Optional[int] = Field(default=None, description="Score from 0-100, filled by Tactical Fit Agent")
+    # Dev 3 Tactical Fit Agent output
+    tactical_fit_score: Optional[float] = Field(default=None, description="Score 0-100, filled by Tactical Fit Agent")
     fit_explanation: Optional[str] = Field(default=None, description="Plain-English tactical fit explanation")
     heatmap_zones: Optional[list[str]] = Field(default=None, description="Positional zones from heatmap analysis")
-    formation_compatibility: Optional[str] = Field(default=None, description="Formation compatibility assessment")
+    formation_compatibility: Optional[list[str]] = Field(default=None, description="Best formations, e.g. ['4-3-3', '4-2-3-1']")
 
 
 class QueryResponse(BaseModel):
