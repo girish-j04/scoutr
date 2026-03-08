@@ -54,7 +54,7 @@ export default function LandingPage() {
       const docH = document.documentElement.scrollHeight - window.innerHeight;
       if (readyRef.current && docH > 0) {
         const rel = Math.max(0, Math.min(1, scrollY / docH));
-        const idx = Math.round((rel * (TOTAL_FRAMES - 1) * 2) % TOTAL_FRAMES);
+        const idx = Math.round((rel * (TOTAL_FRAMES - 1) * 4) % TOTAL_FRAMES);
         drawFrame(idx);
       }
       if (heroContentRef.current) {
