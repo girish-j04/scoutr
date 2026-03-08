@@ -39,6 +39,16 @@ from app.schemas import QueryResponse, SSEEvent, SearchQuery
 from app.services.chroma_service import chroma_service
 from app.services.sqlite_service import get_player_financials
 from app.services.csv_service import get_comparables as csv_get_comparables
+from app.services.mongo_service import (
+    save_conversation, get_conversations, get_conversation,
+    delete_conversation, count_conversations, close_mongo_client,
+)
+from app.services.cache_service import (
+    get_cached_response, get_cached_by_criteria, cache_response,
+    clear_cache, cache_stats,
+)
+from app.agents.query_parser import parse_query
+from app.config import get_settings
 
 
 # ──────────────────────────────────────────────
@@ -82,9 +92,15 @@ async def lifespan(app: FastAPI):
     print("    GET  /player/{id}   - Player profile + financials")
     print("    GET  /comparables   - Comparable transfers")
     print("    POST /export        - PDF scouting report (Dev 3)")
+    print("    -- History & Cache --")
+    print("    GET  /history       - Conversation history")
+    print("    GET  /history/{id}  - Single conversation")
+    print("    DELETE /history/{id} - Delete conversation")
+    print("    POST /cache/clear   - Clear response cache")
     print("    -- System --")
     print("    GET  /health        - Health check")
     yield
+    await close_mongo_client()
     print("[-] ScoutR Unified Backend shutting down.")
 
 
@@ -221,14 +237,49 @@ app.include_router(export_router)
 @app.post("/query", response_model=QueryResponse)
 async def query_endpoint(request: QueryRequest):
     """
-    Run the full AI orchestration pipeline and return complete dossier JSON.
-    Uses golden path cache for the demo query as a safety net.
+    Two-tier cached AI pipeline:
+      1. Check raw text cache (instant hit for identical queries)
+      2. Run query parser (~2s) then check criteria cache
+         (catches semantically equivalent queries)
+      3. Only on double-miss → run full pipeline (~20s)
     """
+    settings = get_settings()
+
     # Golden path shortcut
     if _is_golden_path_query(request.query):
         return GOLDEN_PATH_RESPONSE
 
+    # Tier 1: exact text match (instant)
+    cached = get_cached_response(request.query, ttl_seconds=settings.cache_ttl_seconds)
+    if cached:
+        return cached
+
+    # Tier 2: parse the query, then check criteria cache
+    parsed = await parse_query(request.query)
+    parsed_dict = parsed.model_dump()
+
+    cached_by_criteria = get_cached_by_criteria(parsed_dict, ttl_seconds=settings.cache_ttl_seconds)
+    if cached_by_criteria:
+        return cached_by_criteria
+
+    # Double miss — run the full pipeline
     response, _events = await run_orchestrator(request.query)
+    response_dict = response.model_dump()
+
+    # Cache by both raw text AND parsed criteria
+    cache_response(request.query, parsed_dict, response_dict)
+
+    # Save to MongoDB
+    try:
+        await save_conversation(
+            query=request.query,
+            parsed_criteria=response_dict.get("parsed_criteria", {}),
+            dossiers=response_dict.get("dossiers", []),
+            total_candidates_evaluated=response_dict.get("total_candidates_evaluated", 0),
+        )
+    except Exception as e:
+        print(f"[!] MongoDB save failed (non-fatal): {e}")
+
     return response
 
 
@@ -305,3 +356,46 @@ async def query_stream_endpoint(request: QueryRequest):
             }
 
     return EventSourceResponse(event_generator())
+
+
+# ──────────────────────────────────────────────
+#  History & Cache Endpoints
+# ──────────────────────────────────────────────
+
+@app.get("/history")
+async def list_history(limit: int = 20, skip: int = 0):
+    """List past conversations, newest first."""
+    conversations = await get_conversations(limit=limit, skip=skip)
+    total = await count_conversations()
+    return {"conversations": conversations, "total": total}
+
+
+@app.get("/history/{conversation_id}")
+async def get_history_item(conversation_id: str):
+    """Get a specific past conversation with full dossier data."""
+    conversation = await get_conversation(conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return conversation
+
+
+@app.delete("/history/{conversation_id}")
+async def delete_history_item(conversation_id: str):
+    """Delete a conversation from history."""
+    deleted = await delete_conversation(conversation_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"status": "deleted", "id": conversation_id}
+
+
+@app.post("/cache/clear")
+async def clear_response_cache():
+    """Clear the in-memory response cache."""
+    count = clear_cache()
+    return {"status": "cleared", "entries_removed": count}
+
+
+@app.get("/cache/stats")
+async def get_cache_stats():
+    """Get cache statistics."""
+    return cache_stats()
