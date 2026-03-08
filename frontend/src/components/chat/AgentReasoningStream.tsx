@@ -38,11 +38,12 @@ export default function AgentReasoningStream({
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: i * 0.15, type: "spring", stiffness: 500 }}
-                className="w-2 h-2 rounded-full bg-emerald"
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: "var(--club-primary)" }}
               />
             ))}
           </div>
-          <span className="text-xs font-mono text-emerald tracking-wider">
+          <span className="text-xs font-mono tracking-wider" style={{ color: "var(--club-primary)" }}>
             DEPLOYING AGENTS...
           </span>
         </motion.div>
@@ -63,9 +64,9 @@ export default function AgentReasoningStream({
           className="flex items-center gap-2 pl-9 pb-3"
         >
           <span className="flex gap-0.5">
-            <span className="w-1 h-1 bg-emerald rounded-full animate-bounce [animation-delay:0ms]" />
-            <span className="w-1 h-1 bg-emerald rounded-full animate-bounce [animation-delay:150ms]" />
-            <span className="w-1 h-1 bg-emerald rounded-full animate-bounce [animation-delay:300ms]" />
+            <span className="w-1 h-1 rounded-full animate-bounce [animation-delay:0ms]" style={{ backgroundColor: "var(--club-primary)" }} />
+            <span className="w-1 h-1 rounded-full animate-bounce [animation-delay:150ms]" style={{ backgroundColor: "var(--club-primary)" }} />
+            <span className="w-1 h-1 rounded-full animate-bounce [animation-delay:300ms]" style={{ backgroundColor: "var(--club-primary)" }} />
           </span>
           <span className="text-[10px] font-mono text-ink-faint">Processing...</span>
         </motion.div>

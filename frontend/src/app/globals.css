@@ -17,6 +17,12 @@
   --color-gold-light: #E0BD6A;
   --color-gold-dark: #B8902E;
 
+  --color-acid: #c8f542;
+  --color-acid-dim: rgba(200, 245, 66, 0.6);
+  --color-acid-bg: rgba(200, 245, 66, 0.06);
+  --color-acid-border: rgba(200, 245, 66, 0.15);
+  --color-acid-glow: rgba(200, 245, 66, 0.25);
+
   --color-ink: #E8E6E1;
   --color-ink-muted: #9CA89F;
   --color-ink-faint: #6B7C74;
@@ -28,6 +34,7 @@
   --font-display: var(--font-jakarta), system-ui, sans-serif;
   --font-body: var(--font-dm), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), monospace;
+  --font-display-wide: var(--font-bebas), sans-serif;
 
   --radius-card: 4px;
 
@@ -61,7 +68,6 @@
   }
 
   body {
-    overflow: hidden;
     background-color: var(--color-pitch-950);
     color: var(--color-ink);
   }
@@ -84,6 +90,10 @@
   }
 
   :root {
+    --club-primary: #c8f542;
+    --club-primary-muted: rgba(200, 245, 66, 0.15);
+    --club-primary-text: #060a08;
+
     --background: #0A0F0D;
     --foreground: #E8E6E1;
     --card: #1A2520;
@@ -159,4 +169,9 @@
 
 @utility animate-blink-cursor {
   animation: var(--animate-blink-cursor);
+}
+
+@utility font-bebas {
+  font-family: var(--font-display-wide);
+  letter-spacing: 0.04em;
 }

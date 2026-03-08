@@ -209,4 +209,4 @@ __marimo__/
 
 # Allow ScoutR databases specifically
 !backend/data_pipeline/data/db/players.db
-!backend/data_pipeline/data/db/chroma_db/chroma.sqlite3
+backend/data_pipeline/data/db/chroma_db/chroma.sqlite3

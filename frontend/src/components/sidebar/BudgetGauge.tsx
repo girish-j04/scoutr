@@ -29,7 +29,7 @@ export default function BudgetGauge({ total, remaining }: BudgetGaugeProps) {
             className="h-full rounded-full transition-all duration-700 ease-out"
             style={{
               width: `${pct}%`,
-              background: `linear-gradient(90deg, #1B7A5A, #22956E)`,
+              background: "linear-gradient(90deg, var(--club-primary), color-mix(in srgb, var(--club-primary) 70%, white))",
             }}
           />
         </div>
@@ -37,8 +37,8 @@ export default function BudgetGauge({ total, remaining }: BudgetGaugeProps) {
           <span className="text-[10px] text-ink-faint font-mono">
             {formatFee(spent)} spent
           </span>
-          <span className="text-[10px] text-emerald font-mono font-medium">
-            <NumberTicker value={Math.round(pct)} className="text-emerald font-mono font-medium text-[10px]" />% available
+          <span className="text-[10px] font-mono font-medium" style={{ color: "var(--club-primary)" }}>
+            <NumberTicker value={Math.round(pct)} className="font-mono font-medium text-[10px]" />% available
           </span>
         </div>
       </div>

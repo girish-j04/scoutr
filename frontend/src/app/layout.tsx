@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, DM_Sans, JetBrains_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, DM_Sans, JetBrains_Mono, Bebas_Neue } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
@@ -24,6 +24,13 @@ const jetbrains = JetBrains_Mono({
   weight: ["400", "500", "700"],
 });
 
+const bebas = Bebas_Neue({
+  subsets: ["latin"],
+  variable: "--font-bebas",
+  display: "swap",
+  weight: ["400"],
+});
+
 export const metadata: Metadata = {
   title: "ScoutR — Transfer Intelligence",
   description: "Agentic AI transfer intelligence for football clubs",
@@ -37,7 +44,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${jakarta.variable} ${dmSans.variable} ${jetbrains.variable} font-body antialiased`}
+        className={`${jakarta.variable} ${dmSans.variable} ${jetbrains.variable} ${bebas.variable} font-body antialiased`}
       >
         <TooltipProvider>{children}</TooltipProvider>
       </body>
