@@ -208,4 +208,4 @@ __marimo__/
 
 /*.docx
 
-backend/data_pipeline/data/db/chroma_db/chroma.sqlite3
+*.sqlite3
