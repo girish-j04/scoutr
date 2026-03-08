@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { QueryState, DossierCandidate, MonitoringAlert } from "@/lib/types";
 import { useClub } from "@/lib/ClubContext";
-import { submitQuery, postWatchlist } from "@/lib/api";
+import { submitQuery, postWatchlist, getOrCreateSessionId } from "@/lib/api";
 import { AnimatePresence } from "framer-motion";
 
 import { DotPattern } from "@/components/ui/dot-pattern";
@@ -50,6 +50,8 @@ export default function AppDashboard() {
       candidates: [],
     });
 
+    const sessionId = typeof window !== "undefined" ? getOrCreateSessionId() : undefined;
+
     await submitQuery(
       query,
       (step) => {
@@ -71,7 +73,8 @@ export default function AppDashboard() {
           status: "complete",
           candidates: [],
         }));
-      }
+      },
+      { sessionId }
     );
   }, []);
 

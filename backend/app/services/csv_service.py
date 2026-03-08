@@ -23,7 +23,10 @@ def get_comparables(target_fee: float, limit: int = 5):
     with open(CSV_PATH, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            fee = float(row['fee_m'])
+            try:
+                fee = float(row.get('fee_m', 0))
+            except (ValueError, TypeError):
+                continue
             diff = abs(fee - target_fee)
             comp = dict(row)
             comp["similarity_diff"] = diff
