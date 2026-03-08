@@ -15,8 +15,8 @@
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root {
   --bg: #060a08;
-  --bg-glass: rgba(6, 10, 8, 0.82);
-  --bg-glass-heavy: rgba(6, 10, 8, 0.92);
+  --bg-glass: rgba(6, 10, 8, 0.65);
+  --bg-glass-heavy: rgba(6, 10, 8, 0.78);
   --acid: #c8f542;
   --acid-dim: rgba(200, 245, 66, 0.6);
   --acid-bg: rgba(200, 245, 66, 0.06);
@@ -142,7 +142,9 @@ a { color: inherit; text-decoration: none; }
 .hero-content {
   position: relative; z-index: 2;
   transition: opacity 0.08s linear, transform 0.08s linear;
-  padding: 0 1.5rem;
+  padding: 3rem 2.5rem;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.2) 50%, transparent 75%);
+  border-radius: 20px;
 }
 .hero-badge {
   display: inline-flex; align-items: center; gap: 8px;
@@ -163,14 +165,14 @@ a { color: inherit; text-decoration: none; }
   font-size: clamp(3.5rem, 9vw, 8rem);
   line-height: 0.95; color: var(--white); text-transform: uppercase;
   letter-spacing: 0.02em; margin-bottom: 1.25rem;
-  text-shadow: 0 2px 40px rgba(0,0,0,0.5);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.9), 0 8px 40px rgba(0,0,0,0.7), 0 0 120px rgba(0,0,0,0.5);
 }
 .hero h1 .accent { color: var(--acid); }
 .hero-sub {
   font-family: var(--font-body); font-weight: 300;
   font-size: clamp(1rem, 2vw, 1.3rem);
-  color: var(--muted); max-width: 500px; margin: 0 auto;
-  text-shadow: 0 1px 20px rgba(0,0,0,0.6);
+  color: rgba(242, 244, 240, 0.7); max-width: 500px; margin: 0 auto;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.9), 0 4px 30px rgba(0,0,0,0.6);
 }
 .scroll-hint {
   position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
