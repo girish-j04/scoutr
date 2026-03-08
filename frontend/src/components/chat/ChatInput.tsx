@@ -68,7 +68,7 @@ export default function ChatInput({ onSubmit, isLoading }: ChatInputProps) {
         </Button>
       </div>
       <TextAnimate
-        className="text-[10px] text-ink-faint/40 text-center mt-2 font-mono"
+        className="text-[10px] text-white text-center mt-2 font-mono"
         animation="fadeIn"
         by="word"
         delay={0.5}
