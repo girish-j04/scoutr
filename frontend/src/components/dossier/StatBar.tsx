@@ -46,7 +46,7 @@ export default function StatBar({
         <motion.div
           className="h-full rounded-full"
           style={{
-            background: "linear-gradient(90deg, #1B7A5A, #22956E)",
+            background: "linear-gradient(90deg, var(--club-primary), color-mix(in srgb, var(--club-primary) 70%, white))",
           }}
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
