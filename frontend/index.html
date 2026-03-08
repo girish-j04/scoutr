@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScoutR — Transfer Intelligence, Always On</title>
+<meta name="description" content="Agentic AI transfer intelligence for football clubs. ScoutR watches 50+ leagues so your sporting director doesn't have to.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════
+   RESET & TOKENS
+   ═══════════════════════════════════════════════════════ */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root {
+  --bg: #060a08;
+  --bg-glass: rgba(6, 10, 8, 0.82);
+  --bg-glass-heavy: rgba(6, 10, 8, 0.92);
+  --acid: #c8f542;
+  --acid-dim: rgba(200, 245, 66, 0.6);
+  --acid-bg: rgba(200, 245, 66, 0.06);
+  --acid-border: rgba(200, 245, 66, 0.15);
+  --acid-glow: rgba(200, 245, 66, 0.25);
+  --white: #f2f4f0;
+  --muted: rgba(242, 244, 240, 0.5);
+  --dim: rgba(242, 244, 240, 0.25);
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-body: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+html { overflow-x: hidden; scroll-behavior: auto; }
+body {
+  background: var(--bg); color: var(--white);
+  font-family: var(--font-body); line-height: 1.6;
+  overflow-x: hidden; -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--acid); color: var(--bg); }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: rgba(200,245,66,0.3); border-radius: 4px; }
+a { color: inherit; text-decoration: none; }
+
+/* ═══════════════════════════════════════════════════════
+   OVERLAYS
+   ═══════════════════════════════════════════════════════ */
+.grain {
+  position: fixed; inset: 0; z-index: 9999; pointer-events: none; opacity: 0.035;
+}
+#progress {
+  position: fixed; top: 0; left: 0; height: 2px; width: 0%;
+  background: var(--acid); z-index: 10000; transition: none;
+}
+#loader {
+  position: fixed; bottom: 0; left: 0; height: 3px;
+  background: var(--acid); z-index: 10001;
+  transition: width 0.15s ease, opacity 0.5s ease;
+}
+
+/* ═══════════════════════════════════════════════════════
+   CANVAS BACKGROUND
+   ═══════════════════════════════════════════════════════ */
+#heroCanvas {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  display: block; z-index: 1;
+}
+.canvas-vignette {
+  position: fixed; inset: 0; z-index: 2; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 20%, rgba(6,10,8,0.55) 70%, rgba(6,10,8,0.85) 100%);
+}
+
+/* ═══════════════════════════════════════════════════════
+   NAV
+   ═══════════════════════════════════════════════════════ */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 500;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 48px; transition: all 0.4s;
+}
+.nav.stuck {
+  background: rgba(6,10,8,0.92); backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--acid-border);
+}
+.nav-brand {
+  display: flex; align-items: center; gap: 8px;
+}
+.nav-brand-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--acid);
+  box-shadow: 0 0 12px var(--acid-glow);
+  animation: navPulse 2.5s ease-in-out infinite;
+}
+@keyframes navPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.nav-brand-text {
+  font-family: var(--font-display); font-size: 22px;
+  letter-spacing: 3px; color: var(--white);
+}
+.nav-links {
+  display: flex; gap: 32px; list-style: none;
+}
+.nav-links a {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
+  transition: color 0.3s; position: relative;
+}
+.nav-links a::after {
+  content: ''; position: absolute; left: 0; bottom: -4px;
+  width: 0; height: 1px; background: var(--acid);
+  transition: width 0.3s;
+}
+.nav-links a:hover { color: var(--white); }
+.nav-links a:hover::after { width: 100%; }
+.nav-cta {
+  font-family: var(--font-display); font-size: 14px;
+  letter-spacing: 2px; padding: 10px 28px;
+  background: var(--acid); color: var(--bg); border: none;
+  cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+}
+.nav-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 24px var(--acid-glow);
+}
+
+/* ═══════════════════════════════════════════════════════
+   ALL CONTENT ABOVE CANVAS
+   ═══════════════════════════════════════════════════════ */
+#pageContent { position: relative; z-index: 3; }
+
+/* ═══════════════════════════════════════════════════════
+   HERO
+   ═══════════════════════════════════════════════════════ */
+.hero {
+  height: 100vh; display: flex; align-items: center; justify-content: center;
+  text-align: center; position: relative;
+}
+/* Gradient overlay at bottom of hero for readability */
+.hero::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+  height: 40%; background: linear-gradient(to top, var(--bg), transparent);
+  pointer-events: none;
+}
+.hero-content {
+  position: relative; z-index: 2;
+  transition: opacity 0.08s linear, transform 0.08s linear;
+  padding: 0 1.5rem;
+}
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 3px; text-transform: uppercase;
+  color: var(--acid); padding: 8px 20px;
+  border: 1px solid var(--acid-border);
+  background: rgba(200,245,66,0.04);
+  margin-bottom: 28px;
+  backdrop-filter: blur(8px);
+}
+.hero-badge .pulse {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--acid); animation: navPulse 2s ease-in-out infinite;
+}
+.hero h1 {
+  font-family: var(--font-display); font-weight: 400;
+  font-size: clamp(3.5rem, 9vw, 8rem);
+  line-height: 0.95; color: var(--white); text-transform: uppercase;
+  letter-spacing: 0.02em; margin-bottom: 1.25rem;
+  text-shadow: 0 2px 40px rgba(0,0,0,0.5);
+}
+.hero h1 .accent { color: var(--acid); }
+.hero-sub {
+  font-family: var(--font-body); font-weight: 300;
+  font-size: clamp(1rem, 2vw, 1.3rem);
+  color: var(--muted); max-width: 500px; margin: 0 auto;
+  text-shadow: 0 1px 20px rgba(0,0,0,0.6);
+}
+.scroll-hint {
+  position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+  z-index: 10; display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.scroll-hint span {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 4px; text-transform: uppercase; color: var(--dim);
+}
+.scroll-bar {
+  width: 1px; height: 40px; background: rgba(255,255,255,0.1);
+  position: relative; overflow: hidden;
+}
+.scroll-bar::after {
+  content: ''; position: absolute; top: -100%; left: 0;
+  width: 100%; height: 100%; background: var(--acid);
+  animation: scrollDown 2s ease-in-out infinite;
+}
+@keyframes scrollDown { 0%{top:-100%} 50%{top:0} 100%{top:100%} }
+
+/* ═══════════════════════════════════════════════════════
+   SHARED
+   ═══════════════════════════════════════════════════════ */
+.section-glass {
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(200,245,66,0.05);
+}
+.section-heavy {
+  background: var(--bg-glass-heavy);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+}
+section { padding: 7rem 1.5rem; }
+.container { max-width: 1140px; margin: 0 auto; }
+.reveal {
+  opacity: 0; transform: translateY(40px);
+  transition: opacity 0.7s cubic-bezier(0.4,0,0.2,1), transform 0.7s cubic-bezier(0.4,0,0.2,1);
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+.section-label {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 4px; text-transform: uppercase;
+  color: var(--acid); display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px;
+}
+.section-label::before {
+  content: ''; width: 24px; height: 1px; background: var(--acid);
+}
+
+/* ═══════════════════════════════════════════════════════
+   PROBLEM SECTION
+   ═══════════════════════════════════════════════════════ */
+.problem-grid {
+  display: grid; grid-template-columns: 1fr 1.1fr;
+  gap: 5rem; align-items: center;
+}
+.stat-stack { display: flex; flex-direction: column; gap: 3rem; }
+.stat-item { position: relative; padding-left: 20px; }
+.stat-item::before {
+  content: ''; position: absolute; left: 0; top: 8px;
+  width: 3px; height: calc(100% - 16px);
+  background: linear-gradient(to bottom, var(--acid), transparent);
+}
+.stat-number {
+  font-family: var(--font-display); font-size: clamp(3rem, 6vw, 4.5rem);
+  color: var(--acid); line-height: 1;
+}
+.stat-label {
+  font-family: var(--font-body); font-size: 0.85rem; font-weight: 400;
+  color: var(--muted); margin-top: 4px;
+}
+.problem-text {}
+.problem-text h2 {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3.8vw, 3rem);
+  color: var(--white); line-height: 1.05;
+  letter-spacing: 0.02em; margin-bottom: 1.5rem;
+}
+.problem-text p {
+  font-size: 1rem; font-weight: 300;
+  color: var(--muted); line-height: 1.75;
+}
+
+/* ═══════════════════════════════════════════════════════
+   AGENTS — THE BIG ONE
+   ═══════════════════════════════════════════════════════ */
+.agents-header {
+  text-align: center; margin-bottom: 4rem;
+}
+.agents-heading {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  color: var(--white); letter-spacing: 0.03em;
+}
+.agents-sub {
+  font-family: var(--font-body); font-weight: 300;
+  font-size: 1.05rem; color: var(--muted);
+  max-width: 520px; margin: 0.75rem auto 0;
+}
+
+/* Each agent gets a full-width row with alternating layout */
+.agent-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 3rem; align-items: center;
+  padding: 3.5rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  opacity: 0; transform: translateY(40px);
+  transition: opacity 0.7s cubic-bezier(0.4,0,0.2,1), transform 0.7s cubic-bezier(0.4,0,0.2,1);
+}
+.agent-row.visible { opacity: 1; transform: translateY(0); }
+.agent-row:last-child { border-bottom: none; }
+.agent-row.reverse { direction: rtl; }
+.agent-row.reverse > * { direction: ltr; }
+
+.agent-info {}
+.agent-num {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 3px; text-transform: uppercase;
+  color: var(--acid); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 10px;
+}
+.agent-num::before {
+  content: ''; width: 20px; height: 1px; background: var(--acid);
+}
+.agent-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
+  line-height: 1.05; letter-spacing: 0.02em;
+  margin-bottom: 0.75rem;
+}
+.agent-desc {
+  font-size: 0.95rem; font-weight: 300;
+  color: var(--muted); line-height: 1.7;
+  max-width: 440px;
+}
+
+/* Agent terminal card */
+.agent-terminal {
+  background: rgba(10, 16, 12, 0.9);
+  border: 1px solid var(--acid-border);
+  border-radius: 6px; overflow: hidden;
+  backdrop-filter: blur(8px);
+  transition: border-color 0.4s, box-shadow 0.4s;
+}
+.agent-terminal:hover {
+  border-color: var(--acid-glow);
+  box-shadow: 0 0 40px rgba(200,245,66,0.06);
+}
+.at-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 18px; border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.at-header-left {
+  display: flex; align-items: center; gap: 8px;
+}
+.at-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+}
+.at-dot.live { background: var(--acid); animation: navPulse 2s ease-in-out infinite; }
+.at-dot.gold { background: #f5c518; }
+.at-dot.red { background: #ff4444; animation: navPulse 1.5s ease-in-out infinite; }
+.at-agent-label {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
+}
+.at-status {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 600;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--acid);
+}
+.at-status.gold { color: #f5c518; }
+.at-status.red { color: #ff4444; }
+.at-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.025);
+  transition: background 0.2s;
+}
+.at-row:last-child { border-bottom: none; }
+.at-row:hover { background: rgba(200,245,66,0.02); }
+.at-key {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim);
+}
+.at-val {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  color: var(--white);
+}
+.at-val.green { color: var(--acid); }
+.at-val.gold { color: #f5c518; }
+.at-val.red { color: #ff5555; }
+/* Glow bar */
+.at-glow {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--acid), transparent);
+  opacity: 0.5;
+}
+.at-glow.gold { background: linear-gradient(90deg, transparent, #f5c518, transparent); }
+.at-glow.red { background: linear-gradient(90deg, transparent, #ff4444, transparent); }
+
+/* ═══════════════════════════════════════════════════════
+   PIPELINE
+   ═══════════════════════════════════════════════════════ */
+.pipeline-section { padding: 6rem 1.5rem; }
+.pipeline-heading {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 3rem);
+  text-align: center; letter-spacing: 0.03em;
+  margin-bottom: 3.5rem;
+}
+.pipeline-track {
+  max-width: 800px; margin: 0 auto; position: relative;
+}
+.pipeline-track::before {
+  content: ''; position: absolute;
+  left: 20px; top: 0; bottom: 0; width: 1px;
+  background: linear-gradient(to bottom, var(--acid-border), var(--acid-border) 80%, transparent);
+}
+.pipe-step {
+  display: flex; gap: 36px; padding: 32px 0;
+  position: relative;
+  opacity: 0; transform: translateX(-20px);
+  transition: opacity 0.5s, transform 0.5s;
+}
+.pipe-step.visible { opacity: 1; transform: translateX(0); }
+.pipe-num {
+  width: 40px; height: 40px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--acid-border); background: var(--bg);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  color: var(--acid); position: relative; z-index: 2;
+}
+.pipe-body h3 {
+  font-family: var(--font-display); font-size: 1.3rem;
+  letter-spacing: 0.03em; margin-bottom: 6px;
+}
+.pipe-body p {
+  font-size: 0.9rem; font-weight: 300;
+  color: var(--muted); line-height: 1.65;
+  max-width: 460px; margin-bottom: 10px;
+}
+.pipe-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.pipe-tag {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 4px 12px; border: 1px solid rgba(255,255,255,0.08);
+  color: var(--dim);
+}
+.pipe-tag.hl { border-color: var(--acid-border); color: var(--acid); }
+
+/* ═══════════════════════════════════════════════════════
+   TECH STRIP
+   ═══════════════════════════════════════════════════════ */
+.tech-strip {
+  padding: 3rem 1.5rem;
+  border-top: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.tech-label {
+  font-family: var(--font-mono); font-size: 9px; font-weight: 600;
+  letter-spacing: 4px; text-transform: uppercase;
+  color: var(--dim); text-align: center; margin-bottom: 1rem;
+}
+.tech-pills {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+}
+.tech-pill {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  padding: 6px 16px; border: 1px solid rgba(255,255,255,0.08);
+  color: var(--muted); transition: border-color 0.3s, color 0.3s;
+}
+.tech-pill:hover { border-color: rgba(255,255,255,0.25); color: var(--white); }
+.tech-pill.accent { border-color: var(--acid-border); color: var(--acid); }
+.tech-pill.accent:hover { border-color: var(--acid-glow); }
+
+/* ═══════════════════════════════════════════════════════
+   CTA
+   ═══════════════════════════════════════════════════════ */
+.cta-section {
+  min-height: 90vh; display: flex; align-items: center;
+  justify-content: center; text-align: center;
+  padding: 6rem 1.5rem; position: relative;
+}
+/* Top gradient so text reads against the ball */
+.cta-section::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0;
+  height: 50%; background: linear-gradient(to bottom, var(--bg), transparent);
+  pointer-events: none;
+}
+.cta-inner { position: relative; z-index: 2; }
+.cta-section h2 {
+  font-family: var(--font-display);
+  font-size: clamp(3.5rem, 9vw, 8rem);
+  line-height: 0.95; letter-spacing: 0.02em;
+  text-shadow: 0 4px 60px rgba(0,0,0,0.7);
+  margin-bottom: 1rem;
+}
+.cta-section h2 .dim { color: var(--muted); }
+.cta-section h2 .glow { color: var(--acid); }
+.cta-section p {
+  font-size: clamp(1rem, 1.8vw, 1.2rem); font-weight: 300;
+  color: var(--muted); margin-bottom: 2.5rem;
+  text-shadow: 0 2px 20px rgba(0,0,0,0.6);
+}
+.cta-buttons { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-display); font-size: 16px;
+  letter-spacing: 2px; padding: 14px 40px;
+  cursor: pointer; display: inline-block; border: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.btn:hover { transform: translateY(-2px); }
+.btn-primary {
+  background: var(--acid); color: var(--bg);
+}
+.btn-primary:hover { box-shadow: 0 6px 30px var(--acid-glow); }
+.btn-outline {
+  background: transparent; color: var(--acid);
+  border: 1.5px solid var(--acid-border);
+}
+.btn-outline:hover { border-color: var(--acid); background: var(--acid-bg); }
+
+/* ═══════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════ */
+footer {
+  padding: 28px 48px; display: flex;
+  justify-content: space-between; align-items: center;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--dim); letter-spacing: 1px;
+}
+footer .foot-links { display: flex; gap: 24px; }
+footer a { color: var(--dim); transition: color 0.2s; }
+footer a:hover { color: var(--acid); }
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .nav-links { display: none; }
+  .nav { padding: 16px 24px; }
+  .problem-grid { grid-template-columns: 1fr; gap: 3rem; }
+  .agent-row { grid-template-columns: 1fr; gap: 2rem; }
+  .agent-row.reverse { direction: ltr; }
+  section { padding: 5rem 1.25rem; }
+  footer { flex-direction: column; gap: 12px; padding: 24px; text-align: center; }
+}
+@media (max-width: 600px) {
+  .cta-buttons { flex-direction: column; align-items: center; }
+  .btn { width: 100%; max-width: 280px; text-align: center; }
+}
+</style>
+</head>
+<body>
+
+<!-- Overlays -->
+<svg class="grain" xmlns="http://www.w3.org/2000/svg"><filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(#grain)"/></svg>
+<div id="progress"></div>
+<div id="loader" style="width:0%"></div>
+
+<!-- Fixed canvas — football frame sequence -->
+<canvas id="heroCanvas"></canvas>
+<div class="canvas-vignette"></div>
+
+<!-- NAV -->
+<nav class="nav" id="nav">
+  <div class="nav-brand">
+    <div class="nav-brand-dot"></div>
+    <span class="nav-brand-text" style="font-family:var(--font-display);letter-spacing:3px">SCOUTR</span>
+  </div>
+  <ul class="nav-links">
+    <li><a href="#problem">Problem</a></li>
+    <li><a href="#agents">Agents</a></li>
+    <li><a href="#pipeline">How It Works</a></li>
+  </ul>
+  <button class="nav-cta">EARLY ACCESS</button>
+</nav>
+
+<!-- ═══════════ ALL CONTENT ═══════════ -->
+<div id="pageContent">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-content" id="heroContent">
+      <div class="hero-badge">
+        <span class="pulse"></span>
+        Agentic Transfer Intelligence
+      </div>
+      <h1>Transfer Intelligence<span class="accent">.</span><br>Always On<span class="accent">.</span></h1>
+      <p class="hero-sub">ScoutR watches 50+ leagues so your sporting director doesn't have to.</p>
+    </div>
+    <div class="scroll-hint">
+      <span>Scroll</span>
+      <div class="scroll-bar"></div>
+    </div>
+  </div>
+
+  <!-- PROBLEM SECTION -->
+  <section class="section-glass" id="problem">
+    <div class="container reveal">
+      <div class="problem-grid">
+        <div class="stat-stack">
+          <div class="stat-item">
+            <div class="stat-number" style="font-family:var(--font-display)">300+</div>
+            <div class="stat-label">Clubs flying blind every window</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number" style="font-family:var(--font-display)">€50M</div>
+            <div class="stat-label">Average misspent per transfer window</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number" style="font-family:var(--font-display)">3 Weeks</div>
+            <div class="stat-label">Average manual scouting time per target</div>
+          </div>
+        </div>
+        <div class="problem-text">
+          <div class="section-label"><span>The Problem</span></div>
+          <h2 style="font-family:var(--font-display)">Elite clubs have 20-person analytics departments.</h2>
+          <p>The other 300+ clubs in the Championship, Bundesliga 2, Serie B, and MLS are making multi-million euro transfer decisions with Transfermarkt and a spreadsheet. ScoutR changes that.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AGENTS -->
+  <section class="section-glass" id="agents">
+    <div class="container">
+      <div class="agents-header reveal">
+        <div class="section-label" style="justify-content:center">Four AI Agents</div>
+        <h2 class="agents-heading" style="font-family:var(--font-display)">HOW SCOUTR THINKS</h2>
+        <p class="agents-sub">Each agent runs autonomously, reasons in real time, and streams its output to your screen.</p>
+      </div>
+
+      <!-- Agent 01: Scout -->
+      <div class="agent-row" id="a1">
+        <div class="agent-info">
+          <div class="agent-num">01 · Scout Agent</div>
+          <h3 class="agent-title" style="font-family:var(--font-display)">NATURAL LANGUAGE SEARCH</h3>
+          <p class="agent-desc">Describe the player you need in plain English. The Scout Agent translates your brief into structured criteria, scans real player data across 54 leagues, and returns ranked candidates with full reasoning — streamed live.</p>
+        </div>
+        <div class="agent-terminal">
+          <div class="at-header">
+            <div class="at-header-left"><div class="at-dot live"></div><span class="at-agent-label">Scout Agent</span></div>
+            <div class="at-status">● Live</div>
+          </div>
+          <div class="at-row"><span class="at-key">Query</span><span class="at-val">"LB, U24, high press"</span></div>
+          <div class="at-row"><span class="at-key">Leagues</span><span class="at-val green">54 scanned</span></div>
+          <div class="at-row"><span class="at-key">Filtered</span><span class="at-val green">2,847 → 12 → 3</span></div>
+          <div class="at-row"><span class="at-key">Top Match</span><span class="at-val green">L. Hoffmann — 94.2%</span></div>
+          <div class="at-row"><span class="at-key">Latency</span><span class="at-val">2.4s</span></div>
+          <div class="at-glow"></div>
+        </div>
+      </div>
+
+      <!-- Agent 02: Valuation -->
+      <div class="agent-row reverse" id="a2">
+        <div class="agent-info">
+          <div class="agent-num" style="color:#f5c518"><span style="background:#f5c518" class=""></span>02 · Valuation Agent</div>
+          <h3 class="agent-title" style="font-family:var(--font-display)">MARKET FEE INTELLIGENCE</h3>
+          <p class="agent-desc">Cross-references comparable transfers, contract expiry windows, and selling-club finances to produce a negotiation-ready fee range — not a Transfermarkt guess.</p>
+        </div>
+        <div class="agent-terminal">
+          <div class="at-header">
+            <div class="at-header-left"><div class="at-dot gold"></div><span class="at-agent-label">Valuation Agent</span></div>
+            <div class="at-status gold">● Processing</div>
+          </div>
+          <div class="at-row"><span class="at-key">Market Value</span><span class="at-val gold">€8.2M</span></div>
+          <div class="at-row"><span class="at-key">Range</span><span class="at-val gold">€6.5M – €9.1M</span></div>
+          <div class="at-row"><span class="at-key">Contract</span><span class="at-val">Jun 2026</span></div>
+          <div class="at-row"><span class="at-key">Comparables</span><span class="at-val">14 transfers</span></div>
+          <div class="at-row"><span class="at-key">Seller Pressure</span><span class="at-val red">HIGH</span></div>
+          <div class="at-glow gold"></div>
+        </div>
+      </div>
+
+      <!-- Agent 03: Tactical Fit -->
+      <div class="agent-row" id="a3">
+        <div class="agent-info">
+          <div class="agent-num">03 · Tactical Fit Agent</div>
+          <h3 class="agent-title" style="font-family:var(--font-display)">FORMATION COMPATIBILITY</h3>
+          <p class="agent-desc">Analyses positional heatmaps, pressing metrics, and formation compatibility. Scores how well a target integrates into your system — then explains why in plain English.</p>
+        </div>
+        <div class="agent-terminal">
+          <div class="at-header">
+            <div class="at-header-left"><div class="at-dot live"></div><span class="at-agent-label">Tactical Fit</span></div>
+            <div class="at-status">● Matched</div>
+          </div>
+          <div class="at-row"><span class="at-key">Formation</span><span class="at-val green">4-3-3 ✓</span></div>
+          <div class="at-row"><span class="at-key">Press Resistance</span><span class="at-val green">92nd %ile</span></div>
+          <div class="at-row"><span class="at-key">Prog. Carries</span><span class="at-val green">88th %ile</span></div>
+          <div class="at-row"><span class="at-key">Tactical Score</span><span class="at-val green">9.4 / 10</span></div>
+          <div class="at-row"><span class="at-key">System Overlap</span><span class="at-val">87%</span></div>
+          <div class="at-glow"></div>
+        </div>
+      </div>
+
+      <!-- Agent 04: Monitor -->
+      <div class="agent-row reverse" id="a4">
+        <div class="agent-info">
+          <div class="agent-num" style="color:#ff5555">04 · Monitoring Agent</div>
+          <h3 class="agent-title" style="font-family:var(--font-display)">24/7 TARGET WATCH</h3>
+          <p class="agent-desc">Watches your shortlist around the clock. Sends instant delta alerts when something shifts — contract updates, rival scouts spotted, clubs entering financial trouble.</p>
+        </div>
+        <div class="agent-terminal">
+          <div class="at-header">
+            <div class="at-header-left"><div class="at-dot red"></div><span class="at-agent-label">Monitor</span></div>
+            <div class="at-status red">● 3 Alerts</div>
+          </div>
+          <div class="at-row"><span class="at-key">Contract</span><span class="at-val gold">Expiry in 6mo</span></div>
+          <div class="at-row"><span class="at-key">Rival Activity</span><span class="at-val red">Wolves scouted</span></div>
+          <div class="at-row"><span class="at-key">Club Finances</span><span class="at-val red">FFP breach risk</span></div>
+          <div class="at-row"><span class="at-key">Window</span><span class="at-val gold">32 days left</span></div>
+          <div class="at-row"><span class="at-key">Priority</span><span class="at-val red">ACT NOW</span></div>
+          <div class="at-glow red"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PIPELINE -->
+  <section class="section-heavy pipeline-section" id="pipeline">
+    <div class="container">
+      <div class="section-label reveal" style="justify-content:center">Architecture</div>
+      <h2 class="pipeline-heading reveal" style="font-family:var(--font-display)">QUERY → DOSSIER IN SECONDS</h2>
+      <div class="pipeline-track">
+        <div class="pipe-step">
+          <div class="pipe-num">01</div>
+          <div class="pipe-body">
+            <h3 style="font-family:var(--font-display);letter-spacing:0.03em">NATURAL LANGUAGE QUERY</h3>
+            <p>The sporting director describes what they need. No filters, no dropdowns, no SQL.</p>
+            <div class="pipe-tags"><span class="pipe-tag hl">Claude Sonnet 4</span><span class="pipe-tag">Anthropic API</span></div>
+          </div>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-num">02</div>
+          <div class="pipe-body">
+            <h3 style="font-family:var(--font-display);letter-spacing:0.03em">AGENT ORCHESTRATION</h3>
+            <p>LangGraph coordinates four agents in parallel — each reasons, searches, and scores independently.</p>
+            <div class="pipe-tags"><span class="pipe-tag hl">LangGraph</span><span class="pipe-tag">Python</span><span class="pipe-tag">FastAPI</span></div>
+          </div>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-num">03</div>
+          <div class="pipe-body">
+            <h3 style="font-family:var(--font-display);letter-spacing:0.03em">VECTOR DATA RETRIEVAL</h3>
+            <p>RAG pipelines pull from StatsBomb events, FBref biographies, and Transfermarkt fee comparisons.</p>
+            <div class="pipe-tags"><span class="pipe-tag">Chroma</span><span class="pipe-tag">Pinecone</span><span class="pipe-tag hl">StatsBomb</span></div>
+          </div>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-num">04</div>
+          <div class="pipe-body">
+            <h3 style="font-family:var(--font-display);letter-spacing:0.03em">LIVE REASONING STREAM</h3>
+            <p>Every agent step streams to the UI via SSE. Watch the system think in real time.</p>
+            <div class="pipe-tags"><span class="pipe-tag">SSE</span><span class="pipe-tag hl">Next.js 14</span><span class="pipe-tag">Tailwind</span></div>
+          </div>
+        </div>
+        <div class="pipe-step">
+          <div class="pipe-num">05</div>
+          <div class="pipe-body">
+            <h3 style="font-family:var(--font-display);letter-spacing:0.03em">DOSSIER EXPORT</h3>
+            <p>Player dossier cards with fit scores, valuations, and risk flags. One-click PDF.</p>
+            <div class="pipe-tags"><span class="pipe-tag">pdfkit</span><span class="pipe-tag">One-Click</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TECH STRIP -->
+  <div class="tech-strip section-glass">
+    <div class="container reveal">
+      <div class="tech-label">BUILT ON</div>
+      <div class="tech-pills">
+        <span class="tech-pill">LangGraph</span>
+        <span class="tech-pill accent">Claude Sonnet 4</span>
+        <span class="tech-pill">Chroma</span>
+        <span class="tech-pill">Pinecone</span>
+        <span class="tech-pill">StatsBomb</span>
+        <span class="tech-pill">FastAPI</span>
+        <span class="tech-pill">Next.js 14</span>
+        <span class="tech-pill">Tailwind CSS</span>
+        <span class="tech-pill accent">Anthropic API</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="cta-inner reveal">
+      <h2 style="font-family:var(--font-display)"><span class="dim">Stop Scouting.</span><br><span class="glow">Start Knowing.</span></h2>
+      <p>Built for sporting directors who can't afford to be second.</p>
+      <div class="cta-buttons">
+        <a href="#" class="btn btn-primary">REQUEST EARLY ACCESS</a>
+        <a href="#" class="btn btn-outline">VIEW ON GITHUB</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="section-glass">
+    <span>ScoutR © 2025 — Agentic Transfer Intelligence</span>
+    <div class="foot-links">
+      <a href="#">Docs</a>
+      <a href="#">GitHub</a>
+      <a href="#">Contact</a>
+    </div>
+  </footer>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  /* ── FRAME SEQUENCE (your existing system, preserved) ── */
+  var TOTAL = 192;
+  var canvas = document.getElementById('heroCanvas');
+  var ctx = canvas.getContext('2d');
+  var heroContent = document.getElementById('heroContent');
+  var loader = document.getElementById('loader');
+  var progress = document.getElementById('progress');
+
+  var frames = [];
+  var loaded = 0;
+  var ready = false;
+  var currentFrame = 0;
+
+  function framePath(i) {
+    return 'frames/ezgif-frame-' + String(i).padStart(3, '0') + '.png';
+  }
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    if (ready) drawFrame(currentFrame);
+  }
+
+  function drawFrame(idx) {
+    idx = Math.max(0, Math.min(TOTAL - 1, idx));
+    currentFrame = idx;
+    var img = frames[idx];
+    if (!img || !img.complete) return;
+
+    ctx.fillStyle = '#060a08';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    var cw = canvas.width, ch = canvas.height;
+    var iw = img.naturalWidth, ih = img.naturalHeight;
+    var scale = Math.max(cw / iw, ch / ih);
+    var dw = iw * scale, dh = ih * scale;
+    var dx = (cw - dw) / 2, dy = (ch - dh) / 2;
+    ctx.drawImage(img, dx, dy, dw, dh);
+  }
+
+  for (var i = 1; i <= TOTAL; i++) {
+    var img = new Image();
+    img.src = framePath(i);
+    img.onload = img.onerror = function() {
+      loaded++;
+      var pct = (loaded / TOTAL) * 100;
+      loader.style.width = pct + '%';
+      if (loaded >= TOTAL) {
+        ready = true;
+        loader.style.opacity = '0';
+        setTimeout(function(){ loader.remove(); }, 600);
+        resize();
+        onScroll();
+      }
+    };
+    frames.push(img);
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+
+  /* ── SCROLL HANDLER ── */
+  function onScroll() {
+    var scrollY = window.scrollY || window.pageYOffset;
+    var docH = document.documentElement.scrollHeight - window.innerHeight;
+
+    // Progress bar
+    progress.style.width = (docH > 0 ? (scrollY / docH) * 100 : 0) + '%';
+
+    // Frame animation
+    if (ready && docH > 0) {
+      var rel = Math.max(0, Math.min(1, scrollY / docH));
+      var idx = Math.round(rel * (TOTAL - 1));
+      drawFrame(idx);
+    }
+
+    // Hero parallax fade
+    var heroFade = 1 - Math.min(1, scrollY / (window.innerHeight * 0.4));
+    heroContent.style.opacity = Math.max(0, heroFade);
+    heroContent.style.transform = 'translateY(' + (-scrollY * 0.3) + 'px)';
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  /* ── NAV ── */
+  window.addEventListener('scroll', function() {
+    document.getElementById('nav').classList.toggle('stuck', window.scrollY > 80);
+  });
+
+  /* ── INTERSECTION OBSERVERS ── */
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -30px 0px' });
+
+  document.querySelectorAll('.reveal, .agent-row, .pipe-step').forEach(function(el) {
+    observer.observe(el);
+  });
+
+  /* ── SMOOTH SCROLL ── */
+  document.querySelectorAll('a[href^="#"]').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      var t = document.querySelector(a.getAttribute('href'));
+      if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
