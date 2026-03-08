@@ -2,20 +2,29 @@
 ScoutR Unified FastAPI Application.
 
 Merges Dev 1's data layer (ChromaDB, SQLite, CSV) with Dev 2's AI agent layer
-(LangGraph orchestrator, Gemini LLM, SSE streaming) into a single server.
+(LangGraph orchestrator, Gemini LLM, SSE streaming) and Dev 3's Tactical Fit,
+Monitoring, and PDF export into a single server.
 
 Exposes:
 - POST /query         → Full AI dossier response (batch)
 - POST /query/stream  → SSE stream of reasoning steps + final result
 - POST /search        → Raw player search via ChromaDB vector store
 - GET  /player/{id}   → Single player profile (stats + financials)
-- GET  /comparables   → Historical comparable transfers by fee
+- GET  /comparables   → Historical comparable transfers by fee (or by player_id)
+- POST /export        → PDF scouting report (Dev 3)
 - GET  /health        → Health check
 """
 
 import json
 import os
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# Allow backend to import scoutr package (Dev 3) from repo root
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +33,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from app.agents.orchestrator import run_orchestrator, run_orchestrator_streaming
+from scoutr.api.export_router import export_router
 from app.mock_data import GOLDEN_PATH_RESPONSE
 from app.schemas import QueryResponse, SSEEvent, SearchQuery
 from app.services.chroma_service import chroma_service
@@ -71,6 +81,7 @@ async def lifespan(app: FastAPI):
     print("    POST /search        - ChromaDB player search")
     print("    GET  /player/{id}   - Player profile + financials")
     print("    GET  /comparables   - Comparable transfers")
+    print("    POST /export        - PDF scouting report (Dev 3)")
     print("    -- System --")
     print("    GET  /health        - Health check")
     yield
@@ -159,10 +170,48 @@ def get_player(player_id: str):
 
 
 @app.get("/comparables")
-def get_comp_transfers(target_fee: float):
-    """Get the 5 closest comparable historical transfers by fee amount."""
+def get_comp_transfers(target_fee: float | None = None, player_id: str | None = None):
+    """
+    Get comparable historical transfers.
+    - target_fee: fee in millions (primary)
+    - player_id: optional; fetches player's market_value and uses as target_fee (Dev 3 PDF export)
+    """
+    if target_fee is None and player_id:
+        try:
+            metadata = chroma_service.collection.get(ids=[player_id])
+            if metadata and metadata.get("metadatas"):
+                mv = metadata["metadatas"][0].get("market_value", 5.0)
+            else:
+                fin = get_player_financials(player_id)
+                mv = float(fin.get("market_value", 5_000_000) or 5_000_000)
+            # CSV expects fee in millions; market_value may be raw (e.g. 5000000) or millions
+            target_fee = mv / 1_000_000 if mv > 1000 else mv
+        except Exception:
+            target_fee = 5.0
+    if target_fee is None:
+        target_fee = 5.0
     comps = csv_get_comparables(target_fee)
-    return {"comparables": comps}
+    out = {"comparables": comps}
+    # Dev 3 PDF expects low_fee, mid_fee, high_fee for fee range
+    if comps:
+        fees = []
+        for c in comps:
+            fm = c.get("fee_m") if isinstance(c, dict) else getattr(c, "fee_millions", None)
+            try:
+                fees.append(float(fm) if fm else 0)
+            except (TypeError, ValueError):
+                pass
+        if fees:
+            low, high = min(fees), max(fees)
+            mid = (low + high) / 2
+            out["low_fee"] = f"€{int(low*1e6):,}"
+            out["mid_fee"] = f"€{int(mid*1e6):,}"
+            out["high_fee"] = f"€{int(high*1e6):,}"
+    return out
+
+
+# Dev 3: PDF export router (POST /export)
+app.include_router(export_router)
 
 
 # ──────────────────────────────────────────────
