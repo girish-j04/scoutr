@@ -345,7 +345,7 @@ export default function LandingPage() {
                 {
                   num: "01", title: "NATURAL LANGUAGE QUERY",
                   desc: "The sporting director describes what they need. No filters, no dropdowns, no SQL.",
-                  tags: [{ label: "Claude Sonnet 4", hl: true }, { label: "Anthropic API" }],
+                  tags: [{ label: "Gemini 2.5 Flash", hl: true }, { label: "Google AI" }],
                 },
                 {
                   num: "02", title: "AGENT ORCHESTRATION",
@@ -355,7 +355,7 @@ export default function LandingPage() {
                 {
                   num: "03", title: "VECTOR DATA RETRIEVAL",
                   desc: "RAG pipelines pull from StatsBomb events, FBref biographies, and Transfermarkt fee comparisons.",
-                  tags: [{ label: "Chroma" }, { label: "Pinecone" }, { label: "StatsBomb", hl: true }],
+                  tags: [{ label: "Chroma" }, { label: "StatsBomb", hl: true }],
                 },
                 {
                   num: "04", title: "LIVE REASONING STREAM",
@@ -390,10 +390,10 @@ export default function LandingPage() {
           <div className="l-container l-reveal">
             <div className="l-tech-label">BUILT ON</div>
             <div className="l-tech-pills">
-              {["LangGraph", "Claude Sonnet 4", "Chroma", "Pinecone", "StatsBomb", "FastAPI", "Next.js 14", "Tailwind CSS", "Anthropic API"].map((t) => (
+              {["LangGraph", "Gemini 2.5 Flash", "Chroma", "StatsBomb", "FastAPI", "Next.js 14", "Tailwind CSS", "Google AI"].map((t) => (
                 <span
                   key={t}
-                  className={`l-tech-pill${t === "Claude Sonnet 4" || t === "Anthropic API" ? " accent" : ""}`}
+                  className={`l-tech-pill${t === "Gemini 2.5 Flash" || t === "Google AI" ? " accent" : ""}`}
                 >
                   {t}
                 </span>

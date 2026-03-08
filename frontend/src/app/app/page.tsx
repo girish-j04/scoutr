@@ -41,6 +41,18 @@ export default function AppDashboard() {
   const [monitoredPlayers, setMonitoredPlayers] = useState<any[]>([]);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout>();
+  const abortQueryRef = useRef<(() => void) | null>(null);
+
+  const handleStop = useCallback(() => {
+    if (abortQueryRef.current) {
+      abortQueryRef.current();
+      abortQueryRef.current = null;
+    }
+    setQueryState((prev) => ({
+      ...prev,
+      status: "complete",
+    }));
+  }, []);
 
   const handleSubmit = useCallback(async (query: string) => {
     setQueryState({
@@ -50,7 +62,12 @@ export default function AppDashboard() {
       candidates: [],
     });
 
-    await submitQuery(
+    // If an existing request is ongoing, abort it first
+    if (abortQueryRef.current) {
+      abortQueryRef.current();
+    }
+
+    abortQueryRef.current = await submitQuery(
       query,
       (step) => {
         setQueryState((prev) => ({
@@ -309,7 +326,7 @@ export default function AppDashboard() {
         </div>
 
         {/* Fixed chat input */}
-        <ChatInput onSubmit={handleSubmit} isLoading={isLoading} />
+        <ChatInput onSubmit={handleSubmit} onStop={handleStop} isLoading={isLoading} />
       </main>
 
       {/* Monitored Player Detail Modal */}

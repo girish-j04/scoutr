@@ -1,54 +1,92 @@
-# ScoutR
+# ScoutR: Agentic AI Transfer Intelligence
 
-**Agentic AI Transfer Intelligence for Football Clubs**
-
----
-
-## What Is ScoutR?
-
-ScoutR is an agentic AI platform that acts as an always-on transfer intelligence engine for football clubs. It watches player data across 50+ leagues, surfaces candidates that match a club's tactical and financial profile, and delivers ready-to-act scouting dossiers automatically.
-
-The core insight is simple: elite clubs like Manchester City and Bayern Munich have 20-person analytics departments doing this work manually. The 300+ clubs in the Championship, Bundesliga 2, Serie B, and MLS are making multi-million euro transfer decisions with Transfermarkt and a spreadsheet. ScoutR changes that.
+ScoutR is an autonomous, agent-driven transfer intelligence platform for football clubs. Designed for sporting directors, it replaces manual spreadsheet scouting with a unified, natural-language interface. ScoutR continuously monitors 50+ leagues, finds tactical and financial fits, and delivers comprehensive, ready-to-act dossier reports in seconds.
 
 ---
 
-## The Problem It Solves
+## 🏗️ Architecture & Tech Stack
 
-The transfer market is driven by information asymmetry. A sporting director at a mid-tier club might spend weeks manually filtering players, chasing data across three different tools, and still not know whether a target actually fits their formation or if a competitor is already circling. ScoutR runs that entire process autonomously, 24 hours a day, and surfaces the output in a single interface.
+ScoutR is built with a modern, decoupled architecture featuring a Python/FastAPI backend and a React/Next.js frontend. The core intelligence is powered by **Google's Gemini 2.5 Flash** model, orchestrated via **LangGraph**.
 
----
+### Backend (Transfer Intelligence Engine)
+* **Framework Code:** `Python 3.10+`, `FastAPI`
+* **Agent Orchestration:** `LangGraph`, `LangChain`
+* **AI Model:** `Gemini 2.5 Flash` (via `langchain-google-genai`)
+* **Vector Store:** `ChromaDB` (Local embedded for fast similarity search of player metrics)
+* **Relational Data:** `SQLite` (Financials, contract expiries, structured player data)
+* **Caching Layer:** `MongoDB` (Two-tier query caching for instant repeated query resolution)
+* **Streaming:** `sse-starlette` to stream agent reasoning live to the client
+* **Deployment:** Hosted on **Vultr** for high-performance, low-latency API execution
 
-## How It Works
-
-ScoutR is built around four AI agents that work together inside a LangGraph orchestration layer:
-
-- **Scout Agent** — Takes a natural language query from the sporting director and translates it into structured search criteria. It runs that search across real player data and returns ranked candidates with full reasoning shown live.
-- **Valuation Agent** — Cross-references comparable transfers, contract expiry timelines, and club financial situations to produce a negotiation-ready fee range for each candidate.
-- **Tactical Fit Agent** — Scores how well a target player would integrate into the buying club's system. It analyses positional heatmaps, pressing metrics, and formation compatibility, then generates a plain-English explanation.
-- **Monitoring Agent** — Sits in the background watching a pre-set list of targets. It sends delta alerts when something changes: a contract situation, a competitor scout spotted, a club entering financial trouble.
-
-A conversational Sporting Director Co-Pilot interface ties all four agents together. The sporting director types a query in plain English, watches the agents reason in real time, and gets back a set of player dossier cards with a one-click PDF export.
-
----
-
-## Tech Stack
-
-| Layer | Technology | Why |
-|---|---|---|
-| Agent Orchestration | LangGraph (Python) | Multi-agent state machines, controllable agent loops |
-| LLM | Claude Sonnet 4 via Anthropic API | Reasoning, dossier generation, tactical narrative |
-| Vector Store | Chroma (local) or Pinecone (cloud) | RAG over player stats and transfer history |
-| Data Sources | StatsBomb Open Data + FBref scraper | Real player names, press metrics, event data |
-| Backend | FastAPI (Python) | REST endpoints connecting agents to frontend |
-| Frontend | Next.js 14 + Tailwind CSS | Chat interface, dossier cards, pitch diagram |
-| Streaming | Server-Sent Events (SSE) | Live agent reasoning shown step by step in UI |
-| PDF Export | pdfkit (Python) | Auto-generated scouting report, one-click export |
-| Deployment | Vercel (frontend) + Railway (backend) | Fast deploy, no DevOps overhead during hackathon |
+### Frontend (Sporting Director Co-Pilot)
+* **Framework:** `Next.js 14` (App Router)
+* **Styling:** `Tailwind CSS v4`, Custom Native CSS for landing page
+* **UI Components:** `React`, `shadcn/ui`, `Framer Motion` (Micro-animations)
+* **Data Fetching:** Real-time Server-Sent Events (SSE) parsing for live agent reasoning
+* **Export:** One-click PDF Dossier generation via browser print APIs
 
 ---
 
-## Data Sources
+## 🤖 The Four AI Agents
 
-- **StatsBomb Open Data** — free, high-quality event data covering pressing metrics, progressive carries, expected goals, and positional data across major leagues
-- **FBref** — scraped for contract expiry dates, transfer values, and player biographical data
-- **Transfermarkt public data** — comparable transfer fee history used by the Valuation Agent for fee range estimation
+ScoutR operates through four specialized, autonomous agents orchestrated by LangGraph working in parallel:
+
+1. **Scout Agent (Natural Language Search):** 
+   Takes a plain-English query (e.g., *"Find me a left-back under 24, comfortable in a high press under €10M"*), parses it into structured criteria using Gemini, and executes a hybrid search against ChromaDB and SQLite.
+2. **Valuation Agent (Market Fee Intelligence):** 
+   Analyses contract expiry dates, comparable market values, and player age to calculate an estimated, realistic transfer fee range and assess selling club pressure.
+3. **Tactical Fit Agent (Formation Compatibility):** 
+   Evaluates progressive carries, pressure success rates, and positional data to score how well a player fits the buying club's tactical system (e.g., high-pressing 4-3-3), providing a plain-English tactical summary.
+4. **Monitoring Agent (24/7 Target Watch):** 
+   *(In Development)* Designed to watch shortlists and send alerts on contract changes, rival scouting activity, or club financial issues.
+
+---
+
+## 🚀 What We've Built So Far
+
+### 1. Robust Data Pipeline & Retrieval
+* Built ingestion scripts to process raw StatsBomb event data and Transfermarkt financials.
+* Constructed a **ChromaDB vector store** mapping complex positional nuances (e.g. mapping "right-back" queries to "right wing back", "right center back", etc.).
+* Implemented a solid fallback mechanism: if ChromaDB is empty, the system automatically falls back to curated mock data.
+
+### 2. High-Performance Streaming Backend
+* Implemented a `/query/stream` endpoint in FastAPI that yields Server-Sent Events (SSE).
+* Optimized **LangGraph** orchestration to run multiple agent tasks concurrently using `asyncio.gather()`, drastically reducing latency.
+* Added a **MongoDB Caching Layer** that hashes query criteria and caches the final dossier output, resulting in near-instantaneous responses for repeated queries.
+
+### 3. Real-Time, Premium Frontend Interface
+* Built a stunning, cinematic landing page (`/`) utilizing a scroll-driven canvas frame sequence (192 frames) and glassmorphism styling.
+* Developed the `/app` dashboard featuring:
+  * A live transfer budget gauge with animated number tickers.
+  * A chat interface that streams the agent's "thought process" in real-time (e.g., *"[Agent] Analyzing tactical fit..."*).
+  * Beautiful dossier cards displaying the final candidate results, complete with radar-style stats, scout summaries, and fee ranges.
+* **Fixed critical frontend streaming bugs**, specifically a CRLF line-ending issue where the SSE parser failed to split `\r\n\r\n` chunks natively, ensuring smooth and reliable UI updates.
+
+### 4. Interactive Feedback & Polishing
+* Refined UI aesthetics by ensuring consistent accessibility (e.g., contrasting CTA buttons, bright white helper text).
+* Implemented "Export to PDF" functionality directly within the dossier cards.
+
+---
+
+## 🛠️ Local Development Setup
+
+### Backend
+1. Navigate to the `backend/` directory: `cd backend`
+2. Create and activate a virtual environment: `python -m venv venv` and `venv\Scripts\activate`
+3. Install dependencies: `pip install -r requirements.txt`
+4. Create a `.env` file with your API keys:
+   ```env
+   GEMINI_API_KEY=your_google_ai_key
+   MONGO_URI=mongodb://localhost:27017
+   ```
+5. Run the server: `uvicorn app.main:app --reload --port 8000`
+
+### Frontend
+1. Navigate to the `frontend/` directory: `cd frontend`
+2. Install dependencies: `npm install`
+3. Start the dev server: `npm run dev`
+4. Open `http://localhost:3000` to view the landing page, or `http://localhost:3000/app` for the dashboard.
+
+---
+
+*Made for sporting directors who can't afford to be second.*
