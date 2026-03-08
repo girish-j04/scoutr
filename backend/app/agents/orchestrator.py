@@ -126,31 +126,31 @@ async def assemble_node(state: OrchestratorState) -> dict:
     # Build a lookup from player_id to valuation
     val_map = {v.player_id: v for v in valuations}
 
+    # Run tactical fit evaluations concurrently with a timeout
+    async def _eval_tf(player_id: str):
+        try:
+            pid_int = int(player_id) if player_id.isdigit() else 1001
+            return await asyncio.wait_for(
+                asyncio.to_thread(
+                    evaluate_tactical_fit,
+                    pid_int,
+                    api_base_url="http://localhost:8000",
+                    use_claude=False,
+                ),
+                timeout=15.0,
+            )
+        except (asyncio.TimeoutError, Exception):
+            return None
+
+    tf_results = await asyncio.gather(
+        *[_eval_tf(str(c.player.player_id)) for c in candidates]
+    )
+
     dossiers: list[PlayerDossier] = []
-    for c in candidates:
+    for c, tf in zip(candidates, tf_results):
         v = val_map.get(c.player.player_id)
         if v is None:
             continue
-
-        # Dev 3: Tactical Fit Agent (runs in thread to avoid blocking)
-        pid = str(c.player.player_id)
-        try:
-            pid_int = int(pid) if pid.isdigit() else 1001
-            tf = await asyncio.to_thread(
-                evaluate_tactical_fit,
-                pid_int,
-                api_base_url="http://localhost:8000",
-                use_claude=True,
-            )
-            tactical_fit_score = tf.get("tactical_fit_score")
-            fit_explanation = tf.get("fit_explanation")
-            heatmap_zones = tf.get("heatmap_zones")
-            formation_compatibility = tf.get("formation_compatibility")
-        except Exception:
-            tactical_fit_score = None
-            fit_explanation = None
-            heatmap_zones = None
-            formation_compatibility = None
 
         dossier = PlayerDossier(
             player=c.player,
@@ -163,10 +163,10 @@ async def assemble_node(state: OrchestratorState) -> dict:
             comparable_transfers=v.comparable_transfers,
             valuation_narrative=v.valuation_summary.valuation_narrative,
             negotiation_insight=v.valuation_summary.negotiation_insight,
-            tactical_fit_score=tactical_fit_score,
-            fit_explanation=fit_explanation,
-            heatmap_zones=heatmap_zones,
-            formation_compatibility=formation_compatibility,
+            tactical_fit_score=tf.get("tactical_fit_score") if tf else None,
+            fit_explanation=tf.get("fit_explanation") if tf else None,
+            heatmap_zones=tf.get("heatmap_zones") if tf else None,
+            formation_compatibility=tf.get("formation_compatibility") if tf else None,
         )
         dossiers.append(dossier)
 
