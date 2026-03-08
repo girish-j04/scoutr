@@ -91,18 +91,9 @@ export default function AppDashboard() {
         {/* Fixed sidebar footer */}
         <div className="flex-shrink-0 border-t border-pitch-700 px-4 py-3">
           <div className="flex items-center gap-2">
-            <div
-              className="w-6 h-6 rounded-card flex items-center justify-center"
-              style={{ backgroundColor: "var(--club-primary-muted)" }}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M6 1L11 4V8L6 11L1 8V4L6 1Z" stroke="var(--club-primary)" strokeWidth="1" fill="none" />
-              </svg>
-            </div>
-            <div>
-              <span className="font-bebas text-sm text-ink block leading-tight tracking-wider">ScoutR</span>
-              <span className="text-[8px] font-mono text-ink-faint tracking-wider">TRANSFER INTELLIGENCE</span>
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="ScoutR" className="h-7 w-auto object-contain" />
+            <span className="text-[8px] font-mono text-ink-faint tracking-wider">TRANSFER INTELLIGENCE</span>
           </div>
         </div>
       </aside>
