@@ -61,6 +61,8 @@ from app.services.mongo_service import (
     save_conversation, get_conversations, get_conversation,
     delete_conversation, count_conversations, close_mongo_client,
     find_by_criteria,
+    get_session_context,
+    update_session_context,
 )
 from app.services.cache_service import (
     get_cached_response, get_cached_by_criteria, cache_response,
@@ -76,6 +78,7 @@ from app.config import get_settings
 
 class QueryRequest(BaseModel):
     query: str
+    session_id: str | None = None  # Optional: enables follow-up context (MongoDB)
 
 
 class WatchlistRequest(BaseModel):
@@ -142,9 +145,16 @@ app.add_middleware(
 #  Core Data API Endpoints (from Dev 1)
 # ──────────────────────────────────────────────
 
+@app.get("/")
+async def root():
+    """Root endpoint for health probes."""
+    return {"status": "ok", "service": "scoutr-unified"}
+
+
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "service": "scoutr-unified"}
+    """Health check endpoint."""
+    return {"status": "ok", "service": "scoutr-unified"}
 
 
 @app.get("/player/{player_id}")
@@ -190,9 +200,19 @@ async def search_players(query: SearchQuery):
 
 
 @app.get("/comparables")
-async def get_comparables(player_id: str = None, fee: float = None):
-    """Get historical comparable transfers."""
-    return csv_get_comparables(player_id=player_id, fee=fee)
+async def get_comparables_endpoint(
+    player_id: str | None = None,
+    fee: float | None = None,
+    target_fee: float | None = None,
+):
+    """Get historical comparable transfers. Uses fee or target_fee (default 5.0)."""
+    target = fee if fee is not None else target_fee if target_fee is not None else 5.0
+    try:
+        comparables = csv_get_comparables(target_fee=target, limit=10)
+        return {"comparables": comparables}
+    except Exception as e:
+        print(f"[!] /comparables failed: {e}")
+        return {"comparables": []}
 
 
 # Dev 3: PDF export router (POST /export)
@@ -237,8 +257,21 @@ async def query_endpoint(request: QueryRequest):
       2. Run query parser (~2s) then check criteria cache
          (catches semantically equivalent queries)
       3. Only on double-miss → run full pipeline (~20s)
+    When session_id is provided, follow-up context is used to merge queries.
     """
     settings = get_settings()
+
+    # Fetch session context for follow-up merging (only when valid session_id provided)
+    previous_query, previous_criteria = None, None
+    _sid = request.session_id and str(request.session_id).strip() or None
+    if _sid:
+        try:
+            ctx = await get_session_context(_sid)
+            if ctx:
+                previous_query = ctx.get("last_query")
+                previous_criteria = ctx.get("last_parsed_criteria")
+        except Exception:
+            pass
 
     # Golden path shortcut
     if _is_golden_path_query(request.query):
@@ -247,28 +280,66 @@ async def query_endpoint(request: QueryRequest):
     # Tier 1: exact text match (instant)
     cached = get_cached_response(request.query, ttl_seconds=settings.cache_ttl_seconds)
     if cached:
+        if _sid and cached.get("parsed_criteria"):
+            try:
+                await update_session_context(
+                    _sid,
+                    request.query,
+                    cached["parsed_criteria"],
+                )
+            except Exception:
+                pass
         return cached
 
-    # Tier 2: parse the query, then check criteria cache
-    parsed = await parse_query(request.query)
+    # Tier 2: parse the query (with follow-up context if any), then check criteria cache
+    parsed = await parse_query(
+        request.query,
+        previous_query=previous_query,
+        previous_criteria=previous_criteria,
+    )
     parsed_dict = parsed.model_dump()
 
     cached_by_criteria = get_cached_by_criteria(parsed_dict, ttl_seconds=settings.cache_ttl_seconds)
     if cached_by_criteria:
+        if _sid:
+            try:
+                await update_session_context(
+                    _sid,
+                    request.query,
+                    parsed_dict,
+                )
+            except Exception:
+                pass
         return cached_by_criteria
 
     # Double miss — run the full pipeline
-    response, _events = await run_orchestrator(request.query)
+    response, _events = await run_orchestrator(
+        request.query,
+        previous_query=previous_query,
+        previous_criteria=previous_criteria,
+    )
     response_dict = response.model_dump()
+    parsed_dict = response_dict.get("parsed_criteria", parsed_dict)
 
     # Cache by both raw text AND parsed criteria
     cache_response(request.query, parsed_dict, response_dict)
+
+    # Update session context for follow-ups
+    if _sid:
+        try:
+            await update_session_context(
+                _sid,
+                request.query,
+                parsed_dict,
+            )
+        except Exception:
+            pass
 
     # Save to MongoDB
     try:
         await save_conversation(
             query=request.query,
-            parsed_criteria=response_dict.get("parsed_criteria", {}),
+            parsed_criteria=parsed_dict,
             dossiers=response_dict.get("dossiers", []),
             total_candidates_evaluated=response_dict.get("total_candidates_evaluated", 0),
         )
@@ -283,8 +354,21 @@ async def query_stream_endpoint(request: QueryRequest):
     """
     Stream reasoning steps via SSE, then emit the final result.
     Uses the same caching tiers as /query to avoid redundant work.
+    When session_id is provided, follow-up context is used to merge queries.
     """
     settings = get_settings()
+
+    # Fetch session context for follow-up merging (only when valid session_id provided)
+    previous_query, previous_criteria = None, None
+    _sid = request.session_id and str(request.session_id).strip() or None
+    if _sid:
+        try:
+            ctx = await get_session_context(_sid)
+            if ctx:
+                previous_query = ctx.get("last_query")
+                previous_criteria = ctx.get("last_parsed_criteria")
+        except Exception:
+            pass
 
     async def event_generator():
         # Golden path shortcut
@@ -314,10 +398,14 @@ async def query_stream_endpoint(request: QueryRequest):
         # Tier 1: raw text cache
         cached_result = get_cached_response(request.query, ttl_seconds=settings.cache_ttl_seconds)
 
-        # Tier 2+3: parse and check criteria cache / MongoDB
+        # Tier 2+3: parse (with follow-up context) and check criteria cache / MongoDB
         if cached_result is None:
             try:
-                parsed = await parse_query(request.query)
+                parsed = await parse_query(
+                    request.query,
+                    previous_query=previous_query,
+                    previous_criteria=previous_criteria,
+                )
                 parsed_dict = parsed.model_dump()
                 cached_result = get_cached_by_criteria(parsed_dict, ttl_seconds=settings.cache_ttl_seconds)
                 if cached_result is None:
@@ -335,23 +423,48 @@ async def query_stream_endpoint(request: QueryRequest):
 
         # If we have a cached result, stream it with synthetic events
         if cached_result:
+            if _sid and cached_result.get("parsed_criteria"):
+                try:
+                    await update_session_context(
+                        _sid,
+                        request.query,
+                        cached_result["parsed_criteria"],
+                    )
+                except Exception:
+                    pass
             yield {"event": "agent_step", "data": SSEEvent(step="cache_hit", detail="Found cached result -- returning instantly.").model_dump_json()}
             yield {"event": "final_result", "data": json.dumps(cached_result, default=str)}
             return
 
         # No cache -- run the full pipeline once and stream events
         try:
-            response, events = await run_orchestrator(request.query)
+            response, events = await run_orchestrator(
+                request.query,
+                previous_query=previous_query,
+                previous_criteria=previous_criteria,
+            )
 
             # Stream the collected events
             for event in events:
                 yield {"event": "agent_step", "data": event.model_dump_json()}
 
             response_dict = response.model_dump()
+            parsed_dict = parsed_dict or response_dict.get("parsed_criteria", {})
 
             # Cache result (reuse parsed_dict from cache-check phase)
-            if parsed_dict is not None:
+            if parsed_dict:
                 cache_response(request.query, parsed_dict, response_dict)
+
+            # Update session context for follow-ups
+            if _sid and parsed_dict:
+                try:
+                    await update_session_context(
+                        _sid,
+                        request.query,
+                        parsed_dict,
+                    )
+                except Exception:
+                    pass
 
             try:
                 await save_conversation(

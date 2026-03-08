@@ -91,23 +91,45 @@ function adaptDossiers(data: any): DossierCandidate[] {
   });
 }
 
+// ── Session ID for follow-up context ─────────────────────────────────────────
+
+const SESSION_KEY = "scoutr_session_id";
+
+export function getOrCreateSessionId(): string {
+  if (typeof window === "undefined") return "";
+  let id = sessionStorage.getItem(SESSION_KEY);
+  if (!id) {
+    id = crypto.randomUUID?.() ?? `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    sessionStorage.setItem(SESSION_KEY, id);
+  }
+  return id;
+}
+
 // ── SSE streaming via fetch (POST) ───────────────────────────────────────────
+
+export interface SubmitQueryOptions {
+  sessionId?: string;
+}
 
 export async function submitQuery(
   query: string,
   onStep: (step: ReasoningStep) => void,
   onComplete: (candidates: DossierCandidate[]) => void,
-  onError: (error: string) => void
+  onError: (error: string) => void,
+  options?: SubmitQueryOptions
 ): Promise<() => void> {
   let aborted = false;
   const controller = new AbortController();
+
+  const body: { query: string; session_id?: string } = { query };
+  if (options?.sessionId) body.session_id = options.sessionId;
 
   (async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/query/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       });
 
@@ -144,7 +166,7 @@ export async function submitQuery(
             });
           } else if (eventType === "final_result") {
             const parsed = JSON.parse(eventData);
-            onComplete(adaptDossiers(parsed));
+            onComplete(adaptDossiers(parsed ?? {}));
           } else if (eventType === "error") {
             const parsed = JSON.parse(eventData);
             onError(parsed.error ?? "Unknown server error");

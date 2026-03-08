@@ -43,6 +43,9 @@ class OrchestratorState(TypedDict):
     valuations: Optional[list[ValuationResult]]
     dossiers: Optional[list[PlayerDossier]]
     events: list[SSEEvent]
+    # For follow-up queries: merge with previous context
+    previous_query: Optional[str]
+    previous_criteria: Optional[dict]
 
 
 # ──────────────────────────────────────────────
@@ -52,8 +55,14 @@ class OrchestratorState(TypedDict):
 async def parse_query_node(state: OrchestratorState) -> dict:
     """Node 1: Parse the natural language query into structured criteria."""
     query = state["query"]
+    previous_query = state.get("previous_query")
+    previous_criteria = state.get("previous_criteria")
 
-    criteria = await parse_query(query)
+    criteria = await parse_query(
+        query,
+        previous_query=previous_query,
+        previous_criteria=previous_criteria,
+    )
 
     return {
         "parsed_criteria": criteria,
@@ -203,9 +212,15 @@ def build_orchestrator_graph() -> StateGraph:
     return graph.compile()
 
 
-async def run_orchestrator(query: str) -> tuple[QueryResponse, list[SSEEvent]]:
+async def run_orchestrator(
+    query: str,
+    previous_query: Optional[str] = None,
+    previous_criteria: Optional[dict] = None,
+) -> tuple[QueryResponse, list[SSEEvent]]:
     """
     Run the full orchestration pipeline and return the final response + events.
+    When previous_query and previous_criteria are provided, the parser merges
+    the follow-up with the previous context.
     """
     graph = build_orchestrator_graph()
 
@@ -221,6 +236,8 @@ async def run_orchestrator(query: str) -> tuple[QueryResponse, list[SSEEvent]]:
                 detail=f"Received query: \"{query[:100]}{'...' if len(query) > 100 else ''}\"",
             ),
         ],
+        "previous_query": previous_query,
+        "previous_criteria": previous_criteria,
     }
 
     final_state = await graph.ainvoke(initial_state)
@@ -235,10 +252,14 @@ async def run_orchestrator(query: str) -> tuple[QueryResponse, list[SSEEvent]]:
     return response, final_state["events"]
 
 
-async def run_orchestrator_streaming(query: str):
+async def run_orchestrator_streaming(
+    query: str,
+    previous_query: Optional[str] = None,
+    previous_criteria: Optional[dict] = None,
+):
     """
     Generator that yields SSEEvents as the orchestrator progresses.
-    Uses LangGraph's astream to get intermediate state updates.
+    Supports follow-up merging via previous_query and previous_criteria.
     """
     graph = build_orchestrator_graph()
 
@@ -254,6 +275,8 @@ async def run_orchestrator_streaming(query: str):
                 detail=f"Received query: \"{query[:100]}{'...' if len(query) > 100 else ''}\"",
             ),
         ],
+        "previous_query": previous_query,
+        "previous_criteria": previous_criteria,
     }
 
     seen_events = 0

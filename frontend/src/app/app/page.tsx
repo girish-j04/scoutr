@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { QueryState, DossierCandidate, MonitoringAlert } from "@/lib/types";
 import { useClub } from "@/lib/ClubContext";
-import { submitQuery, postWatchlist } from "@/lib/api";
+import { submitQuery, postWatchlist, getOrCreateSessionId } from "@/lib/api";
 import { AnimatePresence } from "framer-motion";
 
 import { DotPattern } from "@/components/ui/dot-pattern";
@@ -67,6 +67,8 @@ export default function AppDashboard() {
       abortQueryRef.current();
     }
 
+    const sessionId = typeof window !== "undefined" ? getOrCreateSessionId() : undefined;
+
     abortQueryRef.current = await submitQuery(
       query,
       (step) => {
@@ -88,7 +90,8 @@ export default function AppDashboard() {
           status: "complete",
           candidates: [],
         }));
-      }
+      },
+      { sessionId }
     );
   }, []);
 
@@ -123,7 +126,7 @@ export default function AppDashboard() {
       const alreadyHaveMetadata = monitoredPlayers.some(p => p.player_id === id);
       if (!alreadyHaveMetadata) {
         try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/player/${id}`);
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "/api"}/player/${id}`);
           if (res.ok) {
             const p = await res.json();
             setMonitoredPlayers(curr => {

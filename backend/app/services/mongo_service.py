@@ -119,6 +119,48 @@ async def count_conversations() -> int:
     return await db.conversations.count_documents({})
 
 
+# ──────────────────────────────────────────────
+#  Session Context (for follow-up queries)
+# ──────────────────────────────────────────────
+
+async def get_session_context(session_id: str) -> Optional[dict]:
+    """
+    Get the last query and parsed criteria for a session.
+    Used to merge follow-up queries (e.g. "give me under 24" after "left back under 27").
+    """
+    db = get_mongo_client()
+    doc = await db.session_context.find_one({"session_id": session_id})
+    if not doc:
+        return None
+    return {
+        "last_query": doc.get("last_query", ""),
+        "last_parsed_criteria": doc.get("last_parsed_criteria", {}),
+    }
+
+
+async def update_session_context(
+    session_id: str,
+    query: str,
+    parsed_criteria: dict,
+) -> None:
+    """
+    Store or update the session's last query and parsed criteria.
+    Called after each successful parse so the next follow-up can merge.
+    """
+    db = get_mongo_client()
+    await db.session_context.update_one(
+        {"session_id": session_id},
+        {
+            "$set": {
+                "last_query": query,
+                "last_parsed_criteria": parsed_criteria,
+                "updated_at": datetime.now(timezone.utc),
+            }
+        },
+        upsert=True,
+    )
+
+
 async def find_by_criteria(parsed_criteria: dict) -> Optional[dict]:
     """
     Find the most recent conversation that matches the given parsed criteria.
