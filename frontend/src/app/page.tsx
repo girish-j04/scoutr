@@ -147,8 +147,8 @@ export default function LandingPage() {
       {/* NAV */}
       <nav ref={navRef} className="l-nav">
         <div className="l-brand">
-          <div className="l-brand-dot" />
-          <span className="l-brand-text">SCOUTR</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="ScoutR" className="l-brand-logo" />
         </div>
         <ul className="l-nav-links">
           <li><a href="#problem" onClick={(e) => { e.preventDefault(); scrollTo("problem"); }}>Problem</a></li>

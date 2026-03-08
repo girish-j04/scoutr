@@ -64,10 +64,13 @@ export interface MonitoringAlert {
   id: string;
   player_name: string;
   player_id: string;
-  alert_type: "urgency" | "opportunity";
+  alert_type: "urgency" | "opportunity" | "performance";
   urgency: AlertUrgency;
   description: string;
   timestamp: string;
+  form_score?: number;
+  style_fit?: string;
+  recent_matches?: any[];
 }
 
 export interface SquadGap {

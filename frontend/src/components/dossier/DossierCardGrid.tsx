@@ -9,8 +9,12 @@ import ExportButton from "../ExportButton";
 
 export default function DossierCardGrid({
   candidates,
+  watchlist = [],
+  onWatch,
 }: {
   candidates: DossierCandidate[];
+  watchlist?: string[];
+  onWatch?: (id: string) => void;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const expandedCandidate = candidates.find(
@@ -41,6 +45,8 @@ export default function DossierCardGrid({
             key={candidate.player.player_id}
             candidate={candidate}
             index={i}
+            isWatched={watchlist.includes(candidate.player.player_id)}
+            onWatch={onWatch}
             isExpanded={expandedId === candidate.player.player_id}
             onToggleExpand={() =>
               setExpandedId(

@@ -188,13 +188,22 @@ export async function submitQuery(
   };
 }
 
-// ── Monitoring ───────────────────────────────────────────────────────────────
-
 export async function fetchMonitoringAlerts(): Promise<MonitoringAlert[]> {
   const res = await fetch(`${API_BASE_URL}/monitoring`);
   if (!res.ok) throw new Error("Failed to fetch alerts");
   const data = await res.json();
   // Backend returns { alerts: [...] } from check_watchlist()
+  return data.alerts ?? data;
+}
+
+export async function postWatchlist(playerIds: number[]): Promise<MonitoringAlert[]> {
+  const res = await fetch(`${API_BASE_URL}/watchlist`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ player_ids: playerIds }),
+  });
+  if (!res.ok) throw new Error("Failed to post watchlist");
+  const data = await res.json();
   return data.alerts ?? data;
 }
 

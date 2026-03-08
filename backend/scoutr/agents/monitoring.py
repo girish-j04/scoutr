@@ -19,19 +19,31 @@ AlertType = Literal["contract_urgency", "competitor_scout", "club_finances"]
 Severity = Literal["green", "amber", "red"]
 
 
-def _get_player(
-    player_id: int,
-    api_base_url: str = "http://localhost:8000",
+def _get_player_internal(
+    player_id: int
 ) -> dict[str, Any] | None:
-    """Fetch player from API or golden path."""
-    url = f"{api_base_url.rstrip('/')}/player/{player_id}"
+    """Access services directly without API overhead."""
+    from app.services.chroma_service import chroma_service
+    from app.services.sqlite_service import get_player_financials
+    from scoutr.golden_path import get_golden_path_player
+    
+    pid_str = str(player_id)
     try:
-        with httpx.Client(timeout=10.0) as client:
-            r = client.get(url)
-            if r.status_code == 200:
-                return r.json()
+        results = chroma_service.collection.get(ids=[pid_str])
+        
+        # Try integer variant if string fails
+        if not results["ids"] and pid_str.isdigit():
+             results = chroma_service.collection.get(ids=[str(int(pid_str))])
+
+        if results["ids"] and results["metadatas"]:
+            metadata = dict(results["metadatas"][0] or {})
+            financials = get_player_financials(pid_str)
+            if financials:
+                metadata.update(financials)
+            return metadata
     except Exception:
         pass
+        
     return get_golden_path_player(player_id)
 
 
@@ -67,34 +79,38 @@ def _contract_urgency_alerts(
 
     if months < 0:
         alerts.append({
-            "player_id": player_id,
-            "type": "contract_urgency",
-            "severity": "red",
-            "message": f"{name} — contract has expired. Free agent.",
+            "player_id": str(player_id),
+            "player_name": name,
+            "alert_type": "urgency",
+            "urgency": "red",
+            "description": f"{name} — contract has expired. Free agent.",
             "timestamp": ts,
         })
     elif months < 3:
         alerts.append({
-            "player_id": player_id,
-            "type": "contract_urgency",
-            "severity": "red",
-            "message": f"{name} — contract expires in {int(months * 30)} days. Urgent.",
+            "player_id": str(player_id),
+            "player_name": name,
+            "alert_type": "urgency",
+            "urgency": "red",
+            "description": f"{name} — contract expires in {int(months * 30)} days. Urgent.",
             "timestamp": ts,
         })
     elif months < 6:
         alerts.append({
-            "player_id": player_id,
-            "type": "contract_urgency",
-            "severity": "amber",
-            "message": f"{name} — contract expires in {int(months)} months. Act soon.",
+            "player_id": str(player_id),
+            "player_name": name,
+            "alert_type": "urgency",
+            "urgency": "amber",
+            "description": f"{name} — contract expires in {int(months)} months. Act soon.",
             "timestamp": ts,
         })
     elif months < 12:
         alerts.append({
-            "player_id": player_id,
-            "type": "contract_urgency",
-            "severity": "green",
-            "message": f"{name} — contract expires in {int(months)} months. Monitor.",
+            "player_id": str(player_id),
+            "player_name": name,
+            "alert_type": "urgency",
+            "urgency": "green",
+            "description": f"{name} — contract expires in {int(months)} months. Monitor.",
             "timestamp": ts,
         })
 
@@ -103,17 +119,24 @@ def _contract_urgency_alerts(
 
 def _mock_competitor_scout_alerts(
     player_ids: list[int],
+    players: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """[DEMO] Mock competitor scout alerts. Stub for hackathon."""
     alerts = []
     ts = datetime.now(timezone.utc).isoformat()
     # Only alert for first player as demo
     if player_ids:
+        # Get player name for the first ID if possible
+        player_name = "Player"
+        if players and players[0].get("player_id") == player_ids[0]:
+            player_name = players[0].get("name", "Player")
+
         alerts.append({
-            "player_id": player_ids[0],
-            "type": "competitor_scout",
-            "severity": "amber",
-            "message": "[DEMO] Rival club scouts spotted at recent match. Interest may be growing.",
+            "player_id": str(player_ids[0]),
+            "player_name": player_name,
+            "alert_type": "opportunity",
+            "urgency": "amber",
+            "description": "[DEMO] Rival club scouts spotted at recent match. Interest may be growing.",
             "timestamp": ts,
         })
     return alerts
@@ -129,15 +152,17 @@ def _mock_club_finances_alerts(
     # Pick one lower-value club as "under pressure" for demo
     for p in players:
         pid = p.get("player_id")
-        if pid in player_ids and p.get("market_value", 0) < 4_000_000:
-            alerts.append({
-                "player_id": pid,
-                "type": "club_finances",
-                "severity": "amber",
-                "message": f"[DEMO] {p.get('club', 'Club')} may be open to offers due to financial position.",
-                "timestamp": ts,
-            })
-            break
+        if pid in [str(i) for i in player_ids] or pid in player_ids:
+            if p.get("market_value", 0) < 4_000_000:
+                alerts.append({
+                    "player_id": str(pid),
+                    "player_name": p.get("name", "Player"),
+                    "alert_type": "opportunity",
+                    "urgency": "amber",
+                    "description": f"[DEMO] {p.get('club', 'Club')} may be open to offers due to financial position.",
+                    "timestamp": ts,
+                })
+                break
     return alerts
 
 def _form_update_alerts(
@@ -176,20 +201,21 @@ def _form_update_alerts(
     name = player.get("name", "Player")
 
     if form_score >= 70:
-        severity = "green"
+        urgency = "green"
         msg = f"{name} — Strong form (Score: {form_score}/100) over last {len(matches)} matches. Trending up."
     elif form_score >= 45:
-        severity = "amber"
+        urgency = "amber"
         msg = f"{name} — Stable form (Score: {form_score}/100). Recent match rating: {matches[0]['rating']}."
     else:
-        severity = "red"
+        urgency = "red"
         msg = f"{name} — Poor form (Score: {form_score}/100). Stats highlight lack of involvement."
 
     alerts.append({
-        "player_id": player_id,
-        "type": "form_update",
-        "severity": severity,
-        "message": msg,
+        "player_id": str(player_id),
+        "player_name": name,
+        "alert_type": "performance",
+        "urgency": urgency,
+        "description": msg,
         "timestamp": ts,
         "form_score": form_score,
         "style_fit": style_fit,
@@ -202,20 +228,15 @@ def _form_update_alerts(
 
 def check_watchlist(
     watchlist: list[int],
-    api_base_url: str = "http://localhost:8000",
     include_mock_alerts: bool = True,
     include_form_alerts: bool = True,
 ) -> dict[str, list[dict[str, Any]]]:
-    """Check watchlist and return alerts. Output schema for Dev 4.
-
-    Returns:
-        {"alerts": [{"player_id", "type", "severity", "message", "timestamp"}, ...]}
-    """
+    """Check watchlist and return alerts. Optimized to use internal services."""
     alerts: list[dict[str, Any]] = []
     players: list[dict[str, Any]] = []
 
     for pid in watchlist:
-        player = _get_player(pid, api_base_url)
+        player = _get_player_internal(pid)
         
         # If we have a profile, add specific metadata alerts
         if player:
@@ -231,11 +252,11 @@ def check_watchlist(
                 alerts.extend(_form_update_alerts(pid, dummy_player))
 
     if include_mock_alerts:
-        alerts.extend(_mock_competitor_scout_alerts(watchlist))
+        alerts.extend(_mock_competitor_scout_alerts(watchlist, players))
         alerts.extend(_mock_club_finances_alerts(watchlist, players))
 
-    # Sort by severity (red first, then amber, then green)
-    severity_order = {"red": 0, "amber": 1, "green": 2}
-    alerts.sort(key=lambda a: (severity_order.get(a["severity"], 3), a["timestamp"]))
+    # Sort by urgency (red first, then amber, then green)
+    urgency_order = {"red": 0, "amber": 1, "green": 2}
+    alerts.sort(key=lambda a: (urgency_order.get(a["urgency"], 3), a["timestamp"]))
 
     return {"alerts": alerts}
