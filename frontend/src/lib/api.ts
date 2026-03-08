@@ -167,6 +167,9 @@ export async function submitQuery(
 
         buffer += decoder.decode(value, { stream: true });
 
+        // Normalize CRLF → LF BEFORE splitting so \r\n\r\n becomes \n\n
+        buffer = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
         // SSE events are separated by double newlines
         const parts = buffer.split("\n\n");
         buffer = parts.pop() ?? "";
