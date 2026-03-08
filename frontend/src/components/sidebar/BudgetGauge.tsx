@@ -38,7 +38,7 @@ export default function BudgetGauge({ total, remaining }: BudgetGaugeProps) {
             {formatFee(spent)} spent
           </span>
           <span className="text-[10px] font-mono font-medium" style={{ color: "var(--club-primary)" }}>
-            <NumberTicker value={Math.round(pct)} className="font-mono font-medium text-[10px]" />% available
+            <NumberTicker value={Math.round(pct)} className="font-mono font-medium text-[10px]" style={{ color: "var(--club-primary)" }} />% available
           </span>
         </div>
       </div>
