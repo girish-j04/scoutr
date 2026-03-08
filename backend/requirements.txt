@@ -1,0 +1,16 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+langchain-google-genai>=2.1.0
+langgraph>=0.4.0
+langchain-core>=0.3.52
+pydantic>=2.10.0
+pydantic-settings>=2.8.0
+python-dotenv>=1.0.0
+httpx>=0.28.0
+sse-starlette>=2.2.0
+chromadb
+beautifulsoup4
+requests
+# Dev 3: PDF export (scoutr) + optional LLM for tactical fit
+weasyprint>=62.0
+anthropic>=0.39.0
