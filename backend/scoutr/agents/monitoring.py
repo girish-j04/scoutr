@@ -12,6 +12,7 @@ from typing import Any, Literal
 import httpx
 
 from scoutr.golden_path import get_golden_path_player, get_golden_path_players
+from app.services.sqlite_service import get_recent_matches
 
 
 AlertType = Literal["contract_urgency", "competitor_scout", "club_finances"]
@@ -139,11 +140,71 @@ def _mock_club_finances_alerts(
             break
     return alerts
 
+def _form_update_alerts(
+    player_id: int,
+    player: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """
+    Generate form_update alerts using historical StatsBomb match data from local SQLite.
+    Calculates form based on the most recent 5 matches.
+    """
+    matches = get_recent_matches(str(player_id), limit=5)
+    if not matches:
+        return []
+
+    # Calculate average rating and metrics over last matches
+    avg_rating = sum(m["rating"] for m in matches) / len(matches)
+    total_goals = sum(m["goals"] for m in matches)
+    total_assists = sum(m["assists"] for m in matches)
+    total_tackles = sum(m["tackles"] for m in matches)
+    avg_pass_acc = sum(m["passes_accuracy"] for m in matches) / len(matches)
+
+    # Simplified local Form Score (0-100)
+    # Goal/Assist in last matches is a big boost.
+    form_score = (avg_rating - 5.0) * 15 + (total_goals + total_assists) * 5 + (avg_pass_acc - 70) * 0.5
+    form_score = max(0, min(100, round(form_score, 1)))
+
+    # Style fit based on tackles (defensive intensity) or passing
+    style_fit = "low"
+    if total_tackles > 5 and avg_pass_acc > 75:
+        style_fit = "high"
+    elif total_tackles > 2 or avg_pass_acc > 70:
+        style_fit = "medium"
+
+    alerts = []
+    ts = datetime.now(timezone.utc).isoformat()
+    name = player.get("name", "Player")
+
+    if form_score >= 70:
+        severity = "green"
+        msg = f"{name} — Strong form (Score: {form_score}/100) over last {len(matches)} matches. Trending up."
+    elif form_score >= 45:
+        severity = "amber"
+        msg = f"{name} — Stable form (Score: {form_score}/100). Recent match rating: {matches[0]['rating']}."
+    else:
+        severity = "red"
+        msg = f"{name} — Poor form (Score: {form_score}/100). Stats highlight lack of involvement."
+
+    alerts.append({
+        "player_id": player_id,
+        "type": "form_update",
+        "severity": severity,
+        "message": msg,
+        "timestamp": ts,
+        "form_score": form_score,
+        "style_fit": style_fit,
+        "recent_matches": matches[:3] # Include snippets of last 3 games
+    })
+
+    return alerts
+
+
 
 def check_watchlist(
     watchlist: list[int],
     api_base_url: str = "http://localhost:8000",
     include_mock_alerts: bool = True,
+    include_form_alerts: bool = True,
 ) -> dict[str, list[dict[str, Any]]]:
     """Check watchlist and return alerts. Output schema for Dev 4.
 
@@ -155,9 +216,19 @@ def check_watchlist(
 
     for pid in watchlist:
         player = _get_player(pid, api_base_url)
+        
+        # If we have a profile, add specific metadata alerts
         if player:
             players.append(player)
             alerts.extend(_contract_urgency_alerts(pid, player))
+            if include_form_alerts:
+                alerts.extend(_form_update_alerts(pid, player))
+        else:
+            # EVEN IF NO PROFILE, check for match history alerts
+            if include_form_alerts:
+                # Create a minimal dummy player object so _form_update_alerts works
+                dummy_player = {"name": f"Player {pid}"}
+                alerts.extend(_form_update_alerts(pid, dummy_player))
 
     if include_mock_alerts:
         alerts.extend(_mock_competitor_scout_alerts(watchlist))

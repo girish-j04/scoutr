@@ -15,7 +15,7 @@ export default function TacticalFitGauge({ score, size = 64 }: TacticalFitGaugeP
   const offset = circumference - progress;
 
   const scoreColor =
-    score >= 85 ? "#D4A843" : score >= 70 ? "#22956E" : score >= 50 ? "#9CA89F" : "#C44E4E";
+    score >= 85 ? "var(--club-primary)" : score >= 70 ? "#22956E" : score >= 50 ? "#9CA89F" : "#C44E4E";
 
   return (
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>

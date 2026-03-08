@@ -36,13 +36,17 @@ export default function ChatInput({ onSubmit, isLoading }: ChatInputProps) {
           onKeyDown={handleKeyDown}
           placeholder={GOLDEN_PATH_QUERY}
           disabled={isLoading}
-          className="flex-1 max-h-[120px] resize-none bg-pitch-800 border-pitch-600 rounded-card px-4 py-3 text-sm font-body text-ink placeholder:text-ink-faint/50 focus-visible:ring-emerald/50 focus-visible:border-emerald disabled:opacity-50"
+          className="flex-1 max-h-[120px] resize-none bg-pitch-800 border-pitch-600 rounded-card px-4 py-3 text-sm font-body text-ink placeholder:text-ink-faint/50 focus-visible:ring-[var(--club-primary)]/50 focus-visible:border-[var(--club-primary)] disabled:opacity-50"
         />
         <Button
           onClick={handleSubmit}
           disabled={!query.trim() || isLoading}
           size="icon"
-          className="flex-shrink-0 w-10 h-10 rounded-card bg-emerald text-ink hover:bg-emerald-light active:scale-95 transition-all"
+          className="flex-shrink-0 w-10 h-10 rounded-card active:scale-95 transition-all"
+          style={{
+            backgroundColor: "var(--club-primary)",
+            color: "var(--club-primary-text)",
+          }}
         >
           {isLoading ? (
             <span className="flex gap-0.5">

@@ -5,7 +5,6 @@ import { DossierCandidate } from "@/lib/types";
 import { MagicCard } from "@/components/ui/magic-card";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { NumberTicker } from "@/components/ui/number-ticker";
-import { Badge } from "@/components/ui/badge";
 import TacticalFitGauge from "./TacticalFitGauge";
 import StatBar from "./StatBar";
 import ContractRiskDot from "./ContractRiskDot";
@@ -44,31 +43,27 @@ export default function DossierCard({
         {/* Inner content — click handler lives here, on the actual visible surface */}
         <div
           onClick={onToggleExpand}
-          className="relative border-l-2 border-l-gold p-4 select-none"
+          className="relative p-4 select-none"
           style={{
             backgroundColor: "#1A2520",
             borderRadius: "inherit",
             borderTop: "1px solid #243530",
             borderRight: "1px solid #243530",
             borderBottom: "1px solid #243530",
+            borderLeft: `2px solid ${rank === 1 ? "var(--club-primary)" : "#D4A843"}`,
           }}
         >
           {/* Header */}
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <Badge
-                  variant={rank === 1 ? "default" : "outline"}
-                  className={
-                    rank === 1
-                      ? "bg-gold/20 text-gold border-gold/30 font-mono text-[9px] h-5 px-1.5 rounded-sm"
-                      : rank === 2
-                        ? "bg-transparent text-ink-muted border-ink-faint/20 font-mono text-[9px] h-5 px-1.5 rounded-sm"
-                        : "bg-transparent text-ink-faint border-ink-faint/10 font-mono text-[9px] h-5 px-1.5 rounded-sm"
-                  }
+                {/* Bebas Neue rank number */}
+                <span
+                  className="font-bebas text-2xl leading-none flex-shrink-0"
+                  style={{ color: rank === 1 ? "var(--club-primary)" : rank === 2 ? "#D4A843" : "#6B7C74" }}
                 >
                   #{rank}
-                </Badge>
+                </span>
                 <h3 className="font-display font-extrabold text-base text-ink truncate leading-tight">
                   {player.name}
                 </h3>
@@ -133,7 +128,7 @@ export default function DossierCard({
 
         {/* BorderBeam on rank 1 only */}
         {rank === 1 && (
-          <BorderBeam size={80} duration={8} colorFrom="#D4A843" colorTo="#1B7A5A" borderWidth={1} />
+          <BorderBeam size={80} duration={8} colorFrom="var(--club-primary)" colorTo="#D4A843" borderWidth={1} />
         )}
       </MagicCard>
     </motion.div>
