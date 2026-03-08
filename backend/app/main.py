@@ -231,6 +231,22 @@ app.include_router(export_router)
 
 
 # ──────────────────────────────────────────────
+#  Monitoring Endpoint (Dev 3 → Dev 4)
+# ──────────────────────────────────────────────
+
+@app.get("/monitoring")
+def get_monitoring_alerts(player_ids: str = "1001,1002,1003"):
+    """
+    Return monitoring alerts for a watchlist of player IDs.
+    Accepts a comma-separated list of IDs, e.g. /monitoring?player_ids=1001,1002
+    Defaults to the golden path demo players.
+    """
+    from scoutr.agents.monitoring import check_watchlist
+    ids = [int(x.strip()) for x in player_ids.split(",") if x.strip().isdigit()]
+    return check_watchlist(ids)
+
+
+# ──────────────────────────────────────────────
 #  AI Agent Endpoints (from Dev 2)
 # ──────────────────────────────────────────────
 
