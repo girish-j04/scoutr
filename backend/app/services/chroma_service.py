@@ -7,6 +7,7 @@ with smart position mapping for StatsBomb dataset labels.
 
 import chromadb
 import os
+from typing import Any, Union
 
 DB_PATH = os.path.join(os.path.dirname(__file__), '../../data_pipeline/data/db/chroma_db')
 
@@ -16,8 +17,11 @@ class ChromaService:
         self.client = chromadb.PersistentClient(path=DB_PATH)
         self.collection = self.client.get_or_create_collection(name="players")
 
-    def search_players(self, query: dict):
+    def search_players(self, query: Any):
         """Search players using ChromaDB with smart position mapping."""
+        if hasattr(query, "model_dump"):
+            query = query.model_dump()
+            
         filters = []
 
         if query.get("position"):

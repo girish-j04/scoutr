@@ -6,6 +6,14 @@ import random
 DB_PATH = os.path.join(os.path.dirname(__file__), 'data/db/chroma_db')
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data/statsbomb/data')
 
+def clean_text(text: str) -> str:
+    """Strip newlines, extra spaces, and weird characters."""
+    if not text:
+        return ""
+    # Replace all newlines and tabs with spaces, then consolidate multiple spaces
+    cleaned = str(text).replace("\n", " ").replace("\r", " ").replace("\t", " ")
+    return " ".join(cleaned.split()).strip()
+
 def ingest_data():
     client = chromadb.PersistentClient(path=DB_PATH)
     try:
@@ -15,15 +23,26 @@ def ingest_data():
         pass
     collection = client.create_collection(name="players")
 
-    target_seasons = [
-        ("9", "281", "1. Bundesliga"),  # Bundesliga 23/24
-        ("11", "90", "La Liga"),        # La Liga 20/21
-        ("43", "106", "World Cup")      # World Cup 2022
-    ]
+    comps_file = os.path.join(DATA_DIR, "competitions.json")
+    with open(comps_file, 'r', encoding='utf-8') as f:
+        competitions = json.load(f)
+        
+    all_seasons = []
+    for comp in competitions:
+        if comp.get("competition_gender", "male").lower() == "female":
+            continue
+            
+        season_str = comp.get("season_name", "")
+        try:
+            start_year = int(season_str[:4])
+            if start_year >= 2021:
+                all_seasons.append((str(comp["competition_id"]), str(comp["season_id"]), clean_text(comp["competition_name"])))
+        except ValueError:
+            pass
 
     players_dict = {}
 
-    for comp_id, season_id, league in target_seasons:
+    for comp_id, season_id, league in all_seasons:
         matches_file = os.path.join(DATA_DIR, "matches", comp_id, f"{season_id}.json")
         if not os.path.exists(matches_file):
             print(f"Skipping {league} - matches file not found.")
@@ -32,12 +51,9 @@ def ingest_data():
         with open(matches_file, 'r', encoding='utf-8') as f:
             matches = json.load(f)
             
-        # We limit to 20 matches per season to keep hackathon iteration quick (~10s)
-        # For a full run, we would just loop over all `matches`.
-        limit = 20 
-        print(f"Processing {limit} matches from {league}...")
+        print(f"Processing all {len(matches)} matches from {league}...")
         
-        for match in matches[:limit]:
+        for match in matches:
             match_id = match["match_id"]
             
             # Extract Player info from Lineups
@@ -49,7 +65,7 @@ def ingest_data():
                 lineups = json.load(f)
                 
             for team in lineups:
-                club = team["team_name"]
+                club = clean_text(team["team_name"])
                 for p in team["lineup"]:
                     pid = str(p["player_id"])
                     if pid not in players_dict:
@@ -59,11 +75,11 @@ def ingest_data():
                             
                         players_dict[pid] = {
                             "player_id": p["player_id"],
-                            "name": p["player_name"],
+                            "name": clean_text(p["player_name"]),
                             "club": club,
                             "league": league,
                             "age": random.randint(18, 35),  # Lineups lack DOB, mocking
-                            "position": pos.lower(),
+                            "position": clean_text(pos.lower()),
                             "pressure_success_rate": 0.0,
                             "pressures": 0,
                             "xA": 0.0,
