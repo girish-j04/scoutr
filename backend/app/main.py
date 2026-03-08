@@ -286,74 +286,96 @@ async def query_endpoint(request: QueryRequest):
 @app.post("/query/stream")
 async def query_stream_endpoint(request: QueryRequest):
     """
-    Run the orchestration pipeline and stream reasoning steps via SSE.
-    Each event is a JSON object: { step: string, detail: string }.
-    The final event has step="final_result" and includes the full response.
+    Stream reasoning steps via SSE, then emit the final result.
+    Uses the same caching tiers as /query to avoid redundant work.
     """
+    settings = get_settings()
 
     async def event_generator():
-        # Golden path shortcut — still stream events for visual effect
+        # Golden path shortcut
         if _is_golden_path_query(request.query):
             demo_events = [
                 SSEEvent(step="received_query", detail=f'Received query: "{request.query[:80]}..."'),
-                SSEEvent(step="parsing_query", detail="Parsed query: Left-Back, under 24, max €7M, contract within 12 months"),
+                SSEEvent(step="parsing_query", detail="Parsed query: Left-Back, under 24, max 7M, contract within 12 months"),
                 SSEEvent(step="searching_players", detail="Searching for Left-Backs matching criteria across 8 players..."),
-                SSEEvent(step="ranking_candidate", detail="#1 Ian Maatsen (Burnley) — score: 88.5 | Elite pressing in the Championship"),
-                SSEEvent(step="ranking_candidate", detail="#2 Destiny Udogie (Udinese) — score: 84.2 | Complete modern full-back profile"),
-                SSEEvent(step="ranking_candidate", detail="#3 Ramy Bensebaini (Gladbach) — score: 79.8 | Bundesliga-tested pressing ability"),
+                SSEEvent(step="ranking_candidate", detail="#1 Ian Maatsen (Burnley) -- score: 88.5 | Elite pressing in the Championship"),
+                SSEEvent(step="ranking_candidate", detail="#2 Destiny Udogie (Udinese) -- score: 84.2 | Complete modern full-back profile"),
+                SSEEvent(step="ranking_candidate", detail="#3 Ramy Bensebaini (Gladbach) -- score: 79.8 | Bundesliga-tested pressing ability"),
                 SSEEvent(step="starting_valuation", detail="Running valuation analysis on 3 candidates..."),
-                SSEEvent(step="valuation_complete", detail="Valued Ian Maatsen: €3.5M - €6.0M (contract risk: red)"),
-                SSEEvent(step="valuation_complete", detail="Valued Destiny Udogie: €4.0M - €6.5M (contract risk: amber)"),
-                SSEEvent(step="valuation_complete", detail="Valued Ramy Bensebaini: €3.0M - €5.5M (contract risk: amber)"),
+                SSEEvent(step="valuation_complete", detail="Valued Ian Maatsen: 3.5M - 6.0M (contract risk: red)"),
+                SSEEvent(step="valuation_complete", detail="Valued Destiny Udogie: 4.0M - 6.5M (contract risk: amber)"),
+                SSEEvent(step="valuation_complete", detail="Valued Ramy Bensebaini: 3.0M - 5.5M (contract risk: amber)"),
                 SSEEvent(step="assembly_complete", detail="Assembled 3 complete player dossiers. Ready for review."),
             ]
             for event in demo_events:
-                yield {
-                    "event": "agent_step",
-                    "data": event.model_dump_json(),
-                }
-
-            # Final result
-            yield {
-                "event": "final_result",
-                "data": GOLDEN_PATH_RESPONSE.model_dump_json(),
-            }
+                yield {"event": "agent_step", "data": event.model_dump_json()}
+            yield {"event": "final_result", "data": GOLDEN_PATH_RESPONSE.model_dump_json()}
             return
 
-        # Live orchestration with streaming
-        final_response = None
-        try:
-            async for event in run_orchestrator_streaming(request.query):
-                if event.step == "final_result":
-                    final_response, _ = await run_orchestrator(request.query)
-                    yield {
-                        "event": "final_result",
-                        "data": final_response.model_dump_json(),
-                    }
-                else:
-                    yield {
-                        "event": "agent_step",
-                        "data": event.model_dump_json(),
-                    }
+        # Check caches before running pipeline
+        cached_result = None
 
-            # If we never hit final_result event, still return the response
-            if final_response is None:
-                final_response, _ = await run_orchestrator(request.query)
-                yield {
-                    "event": "final_result",
-                    "data": final_response.model_dump_json(),
-                }
+        # Tier 1: raw text cache
+        cached_result = get_cached_response(request.query, ttl_seconds=settings.cache_ttl_seconds)
+
+        # Tier 2+3: parse and check criteria cache / MongoDB
+        if cached_result is None:
+            try:
+                parsed = await parse_query(request.query)
+                parsed_dict = parsed.model_dump()
+                cached_result = get_cached_by_criteria(parsed_dict, ttl_seconds=settings.cache_ttl_seconds)
+                if cached_result is None:
+                    mongo_hit = await find_by_criteria(parsed_dict)
+                    if mongo_hit:
+                        cached_result = {
+                            "query": mongo_hit["query"],
+                            "parsed_criteria": mongo_hit["parsed_criteria"],
+                            "dossiers": mongo_hit["dossiers"],
+                            "total_candidates_evaluated": mongo_hit.get("total_candidates_evaluated", 0),
+                        }
+                        cache_response(request.query, parsed_dict, cached_result)
+            except Exception:
+                pass
+
+        # If we have a cached result, stream it with synthetic events
+        if cached_result:
+            yield {"event": "agent_step", "data": SSEEvent(step="cache_hit", detail="Found cached result -- returning instantly.").model_dump_json()}
+            yield {"event": "final_result", "data": json.dumps(cached_result, default=str)}
+            return
+
+        # No cache -- run the full pipeline once and stream events
+        try:
+            response, events = await run_orchestrator(request.query)
+
+            # Stream the collected events
+            for event in events:
+                yield {"event": "agent_step", "data": event.model_dump_json()}
+
+            response_dict = response.model_dump()
+
+            # Cache and save to MongoDB
+            try:
+                parsed = await parse_query(request.query)
+                parsed_dict = parsed.model_dump()
+                cache_response(request.query, parsed_dict, response_dict)
+            except Exception:
+                pass
+
+            try:
+                await save_conversation(
+                    query=request.query,
+                    parsed_criteria=response_dict.get("parsed_criteria", {}),
+                    dossiers=response_dict.get("dossiers", []),
+                    total_candidates_evaluated=response_dict.get("total_candidates_evaluated", 0),
+                )
+            except Exception:
+                pass
+
+            yield {"event": "final_result", "data": response.model_dump_json()}
 
         except Exception as e:
-            yield {
-                "event": "error",
-                "data": json.dumps({"error": str(e)}),
-            }
-            # Fallback to golden path on error
-            yield {
-                "event": "final_result",
-                "data": GOLDEN_PATH_RESPONSE.model_dump_json(),
-            }
+            yield {"event": "error", "data": json.dumps({"error": str(e)})}
+            yield {"event": "final_result", "data": GOLDEN_PATH_RESPONSE.model_dump_json()}
 
     return EventSourceResponse(event_generator())
 
