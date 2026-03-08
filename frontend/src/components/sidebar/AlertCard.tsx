@@ -34,7 +34,7 @@ function timeAgo(timestamp: string): string {
 }
 
 export default function AlertCard({ alert }: { alert: MonitoringAlert }) {
-  const style = urgencyStyles[alert.urgency];
+  const style = urgencyStyles[alert.urgency] || urgencyStyles.amber;
 
   return (
     <div

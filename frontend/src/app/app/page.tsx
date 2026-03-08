@@ -1,17 +1,18 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { QueryState } from "@/lib/types";
-import { MOCK_ALERTS, MOCK_CANDIDATES } from "@/lib/constants";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { QueryState, DossierCandidate, MonitoringAlert } from "@/lib/types";
 import { useClub } from "@/lib/ClubContext";
-import { submitQuery } from "@/lib/api";
+import { submitQuery, postWatchlist } from "@/lib/api";
+import { AnimatePresence } from "framer-motion";
 
 import { DotPattern } from "@/components/ui/dot-pattern";
 
 import ClubSwitcher from "@/components/sidebar/ClubSwitcher";
 import SquadGapCard from "@/components/sidebar/SquadGapCard";
 import BudgetGauge from "@/components/sidebar/BudgetGauge";
-import MonitoringFeed from "@/components/sidebar/MonitoringFeed";
+import MonitoredPlayers from "@/components/sidebar/MonitoredPlayers";
+import MonitoredPlayerDetail from "@/components/monitoring/MonitoredPlayerDetail";
 import ChatInput from "@/components/chat/ChatInput";
 import AgentReasoningStream from "@/components/chat/AgentReasoningStream";
 import DossierCardGrid from "@/components/dossier/DossierCardGrid";
@@ -25,13 +26,21 @@ const EXAMPLE_QUERIES = [
 
 export default function AppDashboard() {
   const { activeClub } = useClub();
+  
+  // Search & Result State
   const [queryState, setQueryState] = useState<QueryState>({
     status: "idle",
     query: "",
     reasoning_steps: [],
     candidates: [],
   });
-  const [inputQuery, setInputQuery] = useState("");
+
+  // Monitoring State
+  const [watchlist, setWatchlist] = useState<string[]>([]); // Start empty
+  const [alerts, setAlerts] = useState<MonitoringAlert[]>([]);
+  const [monitoredPlayers, setMonitoredPlayers] = useState<any[]>([]);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout>();
 
   const handleSubmit = useCallback(async (query: string) => {
     setQueryState({
@@ -60,21 +69,95 @@ export default function AppDashboard() {
         setQueryState((prev) => ({
           ...prev,
           status: "complete",
-          candidates: MOCK_CANDIDATES,
+          candidates: [],
         }));
       }
     );
   }, []);
 
+  const handleMonitor = useCallback((playerId: string) => {
+    setWatchlist(prev => {
+      if (prev.includes(playerId)) {
+        return prev.filter(id => id !== playerId);
+      }
+      return [...prev, playerId];
+    });
+  }, []);
+
+  // 1. Maintain a cache of player metadata from current candidates
+  useEffect(() => {
+    const currentCandidates = queryState.candidates.map(c => c.player);
+    if (currentCandidates.length === 0) return;
+    
+    setMonitoredPlayers(prev => {
+      const combined = [...prev];
+      currentCandidates.forEach(p => {
+        const index = combined.findIndex(item => item.player_id === p.player_id);
+        if (index === -1) combined.push(p);
+        else combined[index] = p;
+      });
+      return combined;
+    });
+  }, [queryState.candidates]);
+
+  // 2. Hydrate missing player data for those in watchlist but not in local cache
+  useEffect(() => {
+    watchlist.forEach(async (id) => {
+      const alreadyHaveMetadata = monitoredPlayers.some(p => p.player_id === id);
+      if (!alreadyHaveMetadata) {
+        try {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/player/${id}`);
+          if (res.ok) {
+            const p = await res.json();
+            setMonitoredPlayers(curr => {
+              if (curr.some(item => item.player_id === id)) return curr;
+              return [...curr, p];
+            });
+          }
+        } catch (e) {
+          console.error(`Failed to hydrate player ${id}`, e);
+        }
+      }
+    });
+  }, [watchlist, monitoredPlayers]);
+
+  const displayMonitored = monitoredPlayers.filter(p => watchlist.includes(p.player_id));
+
+  // Polling for alerts
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const ids = watchlist.map(id => parseInt(id)).filter(id => !isNaN(id));
+        if (ids.length > 0) {
+          const freshAlerts = await postWatchlist(ids);
+          setAlerts(freshAlerts);
+        } else {
+          setAlerts([]);
+        }
+      } catch (e) {
+        console.error("Polling failed", e);
+      }
+    };
+
+    poll(); // Initial poll
+    intervalRef.current = setInterval(poll, 10000); // Poll every 10s
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [watchlist]);
+
   const isLoading = queryState.status === "streaming";
   const hasResults = queryState.candidates.length > 0;
   const isIdle = queryState.status === "idle";
+
+  const activeDetailPlayer = monitoredPlayers.find(p => p.player_id === selectedPlayerId);
 
   return (
     <div className="flex h-screen overflow-hidden">
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside className="w-[280px] flex-shrink-0 bg-pitch-900 border-r border-pitch-700 flex flex-col overflow-hidden">
-        {/* Club switcher (replaces static identity panel) */}
+        {/* Club switcher */}
         <ClubSwitcher />
 
         {/* Scrollable sidebar body */}
@@ -84,7 +167,12 @@ export default function AppDashboard() {
             total={activeClub.budget_total}
             remaining={activeClub.budget_remaining}
           />
-          <MonitoringFeed alerts={MOCK_ALERTS} />
+          
+          <MonitoredPlayers 
+            players={displayMonitored} 
+            onSelect={(id) => setSelectedPlayerId(id)} 
+          />
+          
           <div className="h-4" />
         </div>
 
@@ -155,7 +243,6 @@ export default function AppDashboard() {
                   style={{ color: "var(--club-primary)", opacity: 0.12 }}
                 />
                 <div className="relative z-10">
-                  {/* Icon */}
                   <div
                     className="w-16 h-16 rounded-full flex items-center justify-center mb-5 mx-auto border border-pitch-700"
                     style={{ backgroundColor: "var(--club-primary-muted)" }}
@@ -166,7 +253,6 @@ export default function AppDashboard() {
                     </svg>
                   </div>
 
-                  {/* Headline */}
                   <h3 className="font-body font-bold text-2xl text-ink mb-3 leading-snug tracking-tight">
                     Describe the player you need
                   </h3>
@@ -174,7 +260,6 @@ export default function AppDashboard() {
                     ScoutR deploys four AI agents to search, value, and assess tactical fit across 50+ leagues simultaneously.
                   </p>
 
-                  {/* Example query chips */}
                   <div className="flex flex-wrap gap-2 justify-center">
                     {EXAMPLE_QUERIES.map((q) => (
                       <button
@@ -222,13 +307,30 @@ export default function AppDashboard() {
             )}
 
             {/* Results */}
-            {hasResults && <DossierCardGrid candidates={queryState.candidates} />}
+            {hasResults && (
+              <DossierCardGrid 
+                candidates={queryState.candidates} 
+                watchlist={watchlist}
+                onWatch={handleMonitor}
+              />
+            )}
           </div>
         </div>
 
         {/* Fixed chat input */}
         <ChatInput onSubmit={handleSubmit} isLoading={isLoading} />
       </main>
+
+      {/* Monitored Player Detail Modal */}
+      <AnimatePresence>
+        {activeDetailPlayer && (
+          <MonitoredPlayerDetail 
+            player={activeDetailPlayer} 
+            alerts={alerts} 
+            onClose={() => setSelectedPlayerId(null)} 
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

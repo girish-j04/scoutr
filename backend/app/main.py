@@ -150,21 +150,35 @@ async def health():
 @app.get("/player/{player_id}")
 async def get_player(player_id: str):
     """Fetch full player profile merging StatsBomb stats and SQLite financials."""
-    # 1. Get raw stats from ChromaDB
     try:
+        # 1. Get raw stats from ChromaDB
         results = chroma_service.collection.get(ids=[player_id])
-        if not results["ids"]:
-             raise HTTPException(status_code=404, detail="Player not found in ChromaDB")
         
-        metadata = results["metadatas"][0]
+        # If not found by string, try by integer ID string (just in case)
+        if not results["ids"] and player_id.isdigit():
+             results = chroma_service.collection.get(ids=[str(int(player_id))])
+
+        if not results["ids"] or not results["metadatas"]:
+            # Fallback to golden path for these specific IDs if DB is empty
+            from scoutr.golden_path import get_golden_path_player
+            gp_player = get_golden_path_player(int(player_id) if player_id.isdigit() else 0)
+            if gp_player:
+                return gp_player
+            raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
+        
+        metadata = results["metadatas"][0] or {}
+        
+        # 2. Add financial data from SQLite
+        financials = get_player_financials(player_id)
+        if financials:
+            metadata.update(financials)
+
+        return metadata
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"[ERROR] /player/{player_id} failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-    # 2. Add financial data from SQLite
-    financials = get_player_financials(player_id)
-    metadata.update(financials)
-
-    return metadata
 
 
 @app.post("/search")
@@ -191,10 +205,7 @@ async def watchlist_endpoint(request: WatchlistRequest):
     Check a watchlist of player IDs and return severity-tagged alerts.
     """
     from scoutr.agents.monitoring import check_watchlist
-    return check_watchlist(
-        request.player_ids,
-        api_base_url="http://localhost:8000",
-    )
+    return check_watchlist(request.player_ids)
 
 
 # ──────────────────────────────────────────────
@@ -202,13 +213,14 @@ async def watchlist_endpoint(request: WatchlistRequest):
 # ──────────────────────────────────────────────
 
 @app.get("/monitoring")
-def get_monitoring_alerts(player_ids: str = "1001,1002,1003"):
+def get_monitoring_alerts(player_ids: str = ""):
     """
     Return monitoring alerts for a watchlist of player IDs.
     Accepts a comma-separated list of IDs, e.g. /monitoring?player_ids=1001,1002
-    Defaults to the golden path demo players.
     """
     from scoutr.agents.monitoring import check_watchlist
+    if not player_ids:
+        return {"alerts": []}
     ids = [int(x.strip()) for x in player_ids.split(",") if x.strip().isdigit()]
     return check_watchlist(ids)
 
