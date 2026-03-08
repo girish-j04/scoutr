@@ -5,6 +5,8 @@ Searches for players matching structured criteria, applies weighted ranking,
 and uses Gemini to generate scouting reasoning for each candidate.
 """
 
+import asyncio
+
 from langchain_google_genai import ChatGoogleGenerativeAI
 from app.schemas import (
     ParsedSearchCriteria,
@@ -126,29 +128,38 @@ async def run_scout_agent(
     structured_llm = llm.with_structured_output(CandidateReasoning)
 
     candidates: list[RankedCandidate] = []
-    for rank_idx, (player, composite, tactical, fee, urgency) in enumerate(top_players, start=1):
-        reasoning = await structured_llm.ainvoke(
-            [
-                ("system", REASONING_SYSTEM_PROMPT),
-                ("human", (
-                    f"Rank #{rank_idx} out of {len(players)} candidates evaluated.\n\n"
-                    f"Search criteria: {criteria.model_dump_json()}\n\n"
-                    f"Player profile:\n"
-                    f"- Name: {player.name}\n"
-                    f"- Club: {player.club} ({player.league})\n"
-                    f"- Age: {player.age}, Position: {player.position}\n"
-                    f"- Contract: {player.contract_expiry_months} months remaining\n"
-                    f"- Market value: €{player.market_value}M\n"
-                    f"- Press score: {player.press_score}/100 (PPDA: {player.press_metrics.ppda}, "
-                    f"Pressure success: {player.press_metrics.pressure_success_rate}%)\n"
-                    f"- Progressive carries/90: {player.progressive_carries_per_90}\n"
-                    f"- xA/90: {player.xa_per_90}, xG/90: {player.xg_per_90}\n\n"
-                    f"Composite score: {composite} "
-                    f"(tactical fit: {tactical}, fee fit: {fee}, contract urgency: {urgency})"
-                )),
-            ]
-        )
 
+    # Build reasoning tasks for concurrent execution
+    async def _get_reasoning(rank_idx, player, composite, tactical, fee, urgency):
+        return await structured_llm.ainvoke([
+            ("system", REASONING_SYSTEM_PROMPT),
+            ("human", (
+                f"Rank #{rank_idx} out of {len(players)} candidates evaluated.\n\n"
+                f"Search criteria: {criteria.model_dump_json()}\n\n"
+                f"Player profile:\n"
+                f"- Name: {player.name}\n"
+                f"- Club: {player.club} ({player.league})\n"
+                f"- Age: {player.age}, Position: {player.position}\n"
+                f"- Contract: {player.contract_expiry_months} months remaining\n"
+                f"- Market value: EUR {player.market_value}M\n"
+                f"- Press score: {player.press_score}/100 (PPDA: {player.press_metrics.ppda}, "
+                f"Pressure success: {player.press_metrics.pressure_success_rate}%)\n"
+                f"- Progressive carries/90: {player.progressive_carries_per_90}\n"
+                f"- xA/90: {player.xa_per_90}, xG/90: {player.xg_per_90}\n\n"
+                f"Composite score: {composite} "
+                f"(tactical fit: {tactical}, fee fit: {fee}, contract urgency: {urgency})"
+            )),
+        ])
+
+    # Run ALL reasoning calls concurrently (saves ~10-15s)
+    reasoning_results = await asyncio.gather(*[
+        _get_reasoning(rank_idx, player, composite, tactical, fee, urgency)
+        for rank_idx, (player, composite, tactical, fee, urgency) in enumerate(top_players, start=1)
+    ])
+
+    for rank_idx, ((player, composite, tactical, fee, urgency), reasoning) in enumerate(
+        zip(top_players, reasoning_results), start=1
+    ):
         candidates.append(RankedCandidate(
             player=player,
             rank=rank_idx,

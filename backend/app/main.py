@@ -42,6 +42,7 @@ from app.services.csv_service import get_comparables as csv_get_comparables
 from app.services.mongo_service import (
     save_conversation, get_conversations, get_conversation,
     delete_conversation, count_conversations, close_mongo_client,
+    find_by_criteria,
 )
 from app.services.cache_service import (
     get_cached_response, get_cached_by_criteria, cache_response,
@@ -330,6 +331,7 @@ async def query_stream_endpoint(request: QueryRequest):
 
         # Check caches before running pipeline
         cached_result = None
+        parsed_dict = None  # Reused after pipeline to avoid double-parsing
 
         # Tier 1: raw text cache
         cached_result = get_cached_response(request.query, ttl_seconds=settings.cache_ttl_seconds)
@@ -369,13 +371,9 @@ async def query_stream_endpoint(request: QueryRequest):
 
             response_dict = response.model_dump()
 
-            # Cache and save to MongoDB
-            try:
-                parsed = await parse_query(request.query)
-                parsed_dict = parsed.model_dump()
+            # Cache result (reuse parsed_dict from cache-check phase)
+            if parsed_dict is not None:
                 cache_response(request.query, parsed_dict, response_dict)
-            except Exception:
-                pass
 
             try:
                 await save_conversation(

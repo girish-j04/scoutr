@@ -12,7 +12,12 @@ from typing import TypedDict, Optional
 
 from langgraph.graph import StateGraph, END
 
-from scoutr.agents.tactical_fit import evaluate_tactical_fit
+from scoutr.scoring.tactical_score import (
+    compute_tactical_fit_score,
+    compute_formation_compatibility,
+    get_top_formations,
+)
+from scoutr.agents.tactical_fit import _infer_heatmap_zones, _fallback_explanation
 
 from app.schemas import (
     ParsedSearchCriteria,
@@ -126,31 +131,24 @@ async def assemble_node(state: OrchestratorState) -> dict:
     # Build a lookup from player_id to valuation
     val_map = {v.player_id: v for v in valuations}
 
-    # Run tactical fit evaluations concurrently with a timeout
-    async def _eval_tf(player_id: str):
-        try:
-            pid_int = int(player_id) if player_id.isdigit() else 1001
-            return await asyncio.wait_for(
-                asyncio.to_thread(
-                    evaluate_tactical_fit,
-                    pid_int,
-                    api_base_url="http://localhost:8000",
-                    use_claude=False,
-                ),
-                timeout=15.0,
-            )
-        except (asyncio.TimeoutError, Exception):
-            return None
-
-    tf_results = await asyncio.gather(
-        *[_eval_tf(str(c.player.player_id)) for c in candidates]
-    )
-
     dossiers: list[PlayerDossier] = []
-    for c, tf in zip(candidates, tf_results):
+    for c in candidates:
         v = val_map.get(c.player.player_id)
         if v is None:
             continue
+
+        # Compute tactical fit directly from player data (no HTTP call)
+        player_dict = c.player.model_dump()
+        try:
+            tac_score = compute_tactical_fit_score(player_dict)
+            formations = get_top_formations(player_dict, top_n=3)
+            zones = _infer_heatmap_zones(player_dict)
+            explanation = _fallback_explanation(player_dict, tac_score)
+        except Exception:
+            tac_score = None
+            formations = None
+            zones = None
+            explanation = None
 
         dossier = PlayerDossier(
             player=c.player,
@@ -163,10 +161,10 @@ async def assemble_node(state: OrchestratorState) -> dict:
             comparable_transfers=v.comparable_transfers,
             valuation_narrative=v.valuation_summary.valuation_narrative,
             negotiation_insight=v.valuation_summary.negotiation_insight,
-            tactical_fit_score=tf.get("tactical_fit_score") if tf else None,
-            fit_explanation=tf.get("fit_explanation") if tf else None,
-            heatmap_zones=tf.get("heatmap_zones") if tf else None,
-            formation_compatibility=tf.get("formation_compatibility") if tf else None,
+            tactical_fit_score=tac_score,
+            fit_explanation=explanation,
+            heatmap_zones=zones,
+            formation_compatibility=formations,
         )
         dossiers.append(dossier)
 
