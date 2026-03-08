@@ -12,13 +12,12 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
     gemini_model_name: str = "gemini-2.5-flash"
-
-    # When True, use built-in mock data instead of local ChromaDB/SQLite/CSV
     use_mock_data: bool = False
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"  # Prevent crashes from unrecognized variables
 
 
 @lru_cache()
