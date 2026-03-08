@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120" fill="none">
+  <path d="M50 5 L90 25 L90 85 Q90 105 50 115 Q10 105 10 85 L10 25 Z" fill="#1A3667" stroke="#D4A843" stroke-width="2.5"/>
+  <text x="50" y="48" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="14" fill="#FFFFFF" letter-spacing="2">LEEDS</text>
+  <text x="50" y="68" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="12" fill="#FFFFFF" letter-spacing="2">UNITED</text>
+  <text x="50" y="88" text-anchor="middle" font-family="sans-serif" font-weight="600" font-size="8" fill="#D4A843" letter-spacing="1">AFC</text>
+  <line x1="25" y1="52" x2="75" y2="52" stroke="#D4A843" stroke-width="1" opacity="0.6"/>
+  <line x1="25" y1="74" x2="75" y2="74" stroke="#D4A843" stroke-width="1" opacity="0.6"/>
+</svg>

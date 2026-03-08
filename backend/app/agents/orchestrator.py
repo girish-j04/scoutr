@@ -12,7 +12,12 @@ from typing import TypedDict, Optional
 
 from langgraph.graph import StateGraph, END
 
-from scoutr.agents.tactical_fit import evaluate_tactical_fit
+from scoutr.scoring.tactical_score import (
+    compute_tactical_fit_score,
+    compute_formation_compatibility,
+    get_top_formations,
+)
+from scoutr.agents.tactical_fit import _infer_heatmap_zones, _fallback_explanation
 
 from app.schemas import (
     ParsedSearchCriteria,
@@ -132,25 +137,18 @@ async def assemble_node(state: OrchestratorState) -> dict:
         if v is None:
             continue
 
-        # Dev 3: Tactical Fit Agent (runs in thread to avoid blocking)
-        pid = str(c.player.player_id)
+        # Compute tactical fit directly from player data (no HTTP call)
+        player_dict = c.player.model_dump()
         try:
-            pid_int = int(pid) if pid.isdigit() else 1001
-            tf = await asyncio.to_thread(
-                evaluate_tactical_fit,
-                pid_int,
-                api_base_url="http://localhost:8000",
-                use_claude=True,
-            )
-            tactical_fit_score = tf.get("tactical_fit_score")
-            fit_explanation = tf.get("fit_explanation")
-            heatmap_zones = tf.get("heatmap_zones")
-            formation_compatibility = tf.get("formation_compatibility")
+            tac_score = compute_tactical_fit_score(player_dict)
+            formations = get_top_formations(player_dict, top_n=3)
+            zones = _infer_heatmap_zones(player_dict)
+            explanation = _fallback_explanation(player_dict, tac_score)
         except Exception:
-            tactical_fit_score = None
-            fit_explanation = None
-            heatmap_zones = None
-            formation_compatibility = None
+            tac_score = None
+            formations = None
+            zones = None
+            explanation = None
 
         dossier = PlayerDossier(
             player=c.player,
@@ -163,10 +161,10 @@ async def assemble_node(state: OrchestratorState) -> dict:
             comparable_transfers=v.comparable_transfers,
             valuation_narrative=v.valuation_summary.valuation_narrative,
             negotiation_insight=v.valuation_summary.negotiation_insight,
-            tactical_fit_score=tactical_fit_score,
-            fit_explanation=fit_explanation,
-            heatmap_zones=heatmap_zones,
-            formation_compatibility=formation_compatibility,
+            tactical_fit_score=tac_score,
+            fit_explanation=explanation,
+            heatmap_zones=zones,
+            formation_compatibility=formations,
         )
         dossiers.append(dossier)
 

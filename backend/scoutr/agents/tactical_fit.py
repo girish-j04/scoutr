@@ -61,11 +61,10 @@ def _generate_fit_explanation(
     formation_compatibility: dict[str, float],
     heatmap_zones: list[str],
 ) -> str:
-    """Generate plain-English fit explanation via Gemini or Claude."""
+    """Generate plain-English fit explanation via Gemini."""
     gemini_key = os.environ.get("GEMINI_API_KEY")
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
 
-    if not gemini_key and not anthropic_key:
+    if not gemini_key:
         return (
             f"{player.get('name', 'Player')} scores {tactical_fit_score}/100 for tactical fit. "
             f"Best formations: {', '.join(get_top_formations(player, 3))}. "
@@ -93,23 +92,7 @@ Write a concise, plain-English explanation for a sporting director."""
             text = response.text.strip() if response.text else ""
             return text if text else _fallback_explanation(player, tactical_fit_score)
         except Exception:
-            pass
-
-    if anthropic_key:
-        try:
-            from anthropic import Anthropic
-            client = Anthropic(api_key=anthropic_key)
-            msg = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=200,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            text = msg.content[0].text if msg.content else ""
-            return text.strip() if text else _fallback_explanation(player, tactical_fit_score)
-        except Exception:
-            pass
-
-    return _fallback_explanation(player, tactical_fit_score)
+            return _fallback_explanation(player, tactical_fit_score)
 
 
 def _fallback_explanation(player: dict[str, Any], score: float) -> str:
