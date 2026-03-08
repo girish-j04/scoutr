@@ -859,10 +859,10 @@ footer a:hover { color: var(--acid); }
     // Progress bar
     progress.style.width = (docH > 0 ? (scrollY / docH) * 100 : 0) + '%';
 
-    // Frame animation
+    // Frame animation — 2x rotation speed (cycles through frames twice)
     if (ready && docH > 0) {
       var rel = Math.max(0, Math.min(1, scrollY / docH));
-      var idx = Math.round(rel * (TOTAL - 1));
+      var idx = Math.round((rel * (TOTAL - 1) * 2) % TOTAL);
       drawFrame(idx);
     }
 
