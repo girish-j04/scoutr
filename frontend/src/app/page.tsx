@@ -429,7 +429,7 @@ export default function LandingPage() {
 
         {/* ── FOOTER ── */}
         <footer className="l-footer l-section-glass">
-          <span>ScoutR © 2025 — Agentic Transfer Intelligence</span>
+          <span>ScoutR © 2026 — Agentic Transfer Intelligence</span>
           <div className="l-foot-links">
             <a href="https://github.com/girish-j04/scoutr" target="_blank" rel="noopener noreferrer">GitHub</a>
             <Link href="/app">App</Link>
