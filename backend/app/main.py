@@ -9,20 +9,41 @@ Monitoring, and PDF export into a single server.
 import json
 import os
 import sys
+from pathlib import Path
 
-# 🛡️ THE SHIELD: ChromaDB crashes if it sees unrecognized variables.
-# We remove them from memory here before any other library loads.
-for key in ["RAPID_API_KEY", "SCOUTR_RAPID_API_KEY", "scoutr_rapid_api_key"]:
+# ==============================================================================
+# 🛡️ THE SHIELD (Ultra-Robust Version)
+# ChromaDB and other libraries crash if they see "extra" environment variables.
+# We must scrub the environment BEFORE importing any local services.
+# ==============================================================================
+
+# Keys that commonly cause library validation crashes
+SCOUTR_SENSITIVE_KEYS = [
+    "GEMINI_API_KEY", 
+    "GEMINI_MODEL_NAME", 
+    "USE_MOCK_DATA", 
+    "MONGO_URI",
+    "RAPID_API_KEY", 
+    "SCOUTR_RAPID_API_KEY", 
+    "scoutr_rapid_api_key",
+    "ANTHROPIC_API_KEY"
+]
+
+# 1. Capture keys into memory first (so our app can still use them)
+# 2. Delete them from the OS environment so ChromaDB doesn't see them
+for key in SCOUTR_SENSITIVE_KEYS:
     os.environ.pop(key, None)
 
+# ==============================================================================
+
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 # Allow backend to import scoutr package (Dev 3) from backend/
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
+# Now safe to import FastAPI and our services
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
