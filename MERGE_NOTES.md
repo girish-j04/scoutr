@@ -10,7 +10,7 @@ Merged `origin/main` (Dev 1 + Dev 2) into `dev3-feature`.
 
 ### 1. Backend (`backend/app/main.py`)
 
-- Added repo root to `sys.path` so backend can import `scoutr` (Dev 3)
+- `scoutr` (Dev 3) lives at `backend/scoutr/`; backend adds `backend/` to `sys.path` so `scoutr` is importable
 - Included Dev 3 export router: `POST /export` for PDF scouting reports
 - Extended `GET /comparables` to accept `player_id` for Dev 3 PDF export
 
@@ -24,6 +24,11 @@ Merged `origin/main` (Dev 1 + Dev 2) into `dev3-feature`.
 
 - Added `weasyprint` (PDF export)
 - Added `anthropic` (optional Tactical Fit LLM fallback)
+
+## Structure (unified)
+
+- `backend/` is the single deployable tree
+- `backend/scoutr/` contains Dev 3 agents, scoring, export, golden_path
 
 ## Running
 

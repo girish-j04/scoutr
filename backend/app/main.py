@@ -21,10 +21,10 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-# Allow backend to import scoutr package (Dev 3) from repo root
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+# Allow backend to import scoutr package (Dev 3) from backend/
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware

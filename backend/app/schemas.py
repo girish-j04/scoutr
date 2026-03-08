@@ -120,7 +120,7 @@ class ValuationSummary(BaseModel):
     """LLM-generated valuation narrative."""
 
     valuation_narrative: str = Field(description="2-3 sentence valuation analysis explaining the fee range and contract situation")
-    negotiation_insight: str = Field(description="One-sentence tactical negotiation advice for the sporting director")
+    negotiation_insight: str = Field(default="", description="One-sentence tactical negotiation advice for the sporting director")
 
 
 class ValuationResult(BaseModel):
