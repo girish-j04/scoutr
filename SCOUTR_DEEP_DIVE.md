@@ -1,8 +1,5 @@
 # ScoutR — Complete Code Deep Dive
 
-> **Goal**: After reading this document you should feel like you wrote every line yourself.
-> Every file, every function, every constant, every formula, every fallback path is explained below.
-
 ---
 
 ## Table of Contents
@@ -900,5 +897,3 @@ graph LR
 > **TIP**: The two "leaf" modules (`golden_path.py` and `formations.py`) have zero internal imports. This means they can never participate in circular import issues. Everything else is a clean DAG (directed acyclic graph).
 
 ---
-
-**End of Deep Dive.** You now know every line, every function, every fallback path, every formula, and every integration point in the ScoutR codebase.
